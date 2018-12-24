@@ -31,8 +31,8 @@ public class BasicBaseGenerator implements IBaseGenerator {
         this.baseRadius = baseRadius;
     }
 
-    public ImmutableList<Base<Cord>> generateForSection(ITerrainMap<Cord> sectionMap) {
-        var generator = new Generator(sectionMap);
+    public ImmutableList<Base<Cord>> generateForSection(ITerrainMap<Cord> sectionMap, int sectionNo) {
+        var generator = new Generator(sectionMap, sectionNo);
         generator.place(noOfBasesPerSection);
         return generator.collect.build();
     }
@@ -40,10 +40,14 @@ public class BasicBaseGenerator implements IBaseGenerator {
 
     private class Generator {
         private final ITerrainMap<Cord> map;
+        private final int sectionNo;
         private final ImmutableList.Builder<Base<Cord>> collect = new ImmutableList.Builder<>();
+        private final Predicate<Cord> isFullyInMaster;
 
-        private Generator(ITerrainMap<Cord> map) {
+        private Generator(ITerrainMap<Cord> map, int sectionNo) {
             this.map = map;
+            this.sectionNo = sectionNo;
+            this.isFullyInMaster = worldDefinition.section.isSectionMaster(sectionNo);
         }
 
         private void place(int noOfBases) {
@@ -79,13 +83,16 @@ public class BasicBaseGenerator implements IBaseGenerator {
             var p = baseGeometryFactory.apply(baseCentre);
             if (isFree(p)) {
                 var base = Base.createInSection(baseCentre, baseRadius, worldDefinition);
-                return Optional.of(base);
-            } else {
-                L.error("ToDo failed to place base, the center will not hold");
-                return Optional.empty();
+                if (isFullyInsideMaster(base))
+                    return Optional.of(base);
             }
+            L.error("ToDo failed to place base, the center will not hold");
+            return Optional.empty();
         }
 
+        private boolean isFullyInsideMaster(Base b) {
+            return b.area.stream().allMatch(this.isFullyInMaster);
+        }
 
         private boolean isFree(Predicate<Cord> c) {
             return !map.isOccupied(compose(c, x -> (Cord) x));

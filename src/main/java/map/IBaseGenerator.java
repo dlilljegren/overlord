@@ -8,5 +8,5 @@ import java.util.List;
 
 public interface IBaseGenerator {
 
-    List<Base<Cord>> generateForSection(ITerrainMap<Cord> sectionMap);
+    List<Base<Cord>> generateForSection(ITerrainMap<Cord> sectionMap, int section);
 }

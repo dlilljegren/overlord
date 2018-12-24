@@ -3,12 +3,17 @@ package world;
 import com.dslplatform.json.CompiledJson;
 import com.google.common.collect.Maps;
 
+import javax.annotation.Nonnull;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
 
-public class CellControl {
+import static java.util.Objects.requireNonNull;
+
+public final class CellControl {
+    @Nonnull
     public final Map<Team, Integer> teamPoints;
+    @Nonnull
     public final Cord cord;
 
     CellControl(final Cord cord) {
@@ -17,8 +22,8 @@ public class CellControl {
 
     @CompiledJson
     CellControl(final Cord cord, Map<Team, Integer> teamPoints) {
-        this.cord = cord;
-        this.teamPoints = teamPoints;
+        this.cord = requireNonNull(cord);
+        this.teamPoints = requireNonNull(teamPoints);
     }
 
     void add(Team team, int points) {
@@ -37,6 +42,10 @@ public class CellControl {
      */
     public double teamPercentage(Team team) {
         return points(team) * 1.0 / teamPoints.values().stream().mapToInt(i -> i).sum();
+    }
+
+    public Cord cord() {
+        return this.cord;
     }
 
     public int points(Team team) {

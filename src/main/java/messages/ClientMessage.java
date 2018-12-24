@@ -2,9 +2,12 @@ package messages;
 
 import com.dslplatform.json.CompiledJson;
 import com.google.common.base.MoreObjects;
+import com.google.common.collect.Maps;
 import world.*;
 
 import javax.annotation.Nonnull;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static java.util.Objects.requireNonNull;
@@ -94,6 +97,31 @@ public abstract class ClientMessage {
         public AddUnit(@Nonnull WorldCord cord, @Nonnull Unit unit) {
             this.cord = cord;
             this.unit = unit;
+        }
+    }
+
+    @CompiledJson(onUnknown = CompiledJson.Behavior.IGNORE)
+    public static class ZoneOfControl extends ClientMessage {
+        @Nonnull
+        public final int sectionNo;
+        @Nonnull
+        public final Map<Team, Set<WorldCord>> teamToCords;
+        @Nonnull
+        public final long calculationElapsed;
+
+        public ZoneOfControl(int sectionNo, Map<Team, Set<WorldCord>> teamToCords, long calculationElapsed) {
+            this.sectionNo = sectionNo;
+            this.teamToCords = teamToCords;
+            this.calculationElapsed = calculationElapsed;
+        }
+
+        @Override
+        public String toString() {
+            return MoreObjects.toStringHelper(this)
+                    .add("sectionNo", sectionNo)
+                    .add("teamToCords", Maps.transformEntries(teamToCords, (t, cSet) -> cSet.size()))
+                    .add("calculationElapsed", calculationElapsed)
+                    .toString();
         }
     }
 }

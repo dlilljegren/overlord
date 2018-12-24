@@ -285,6 +285,21 @@
             ctxUnit.drawImage(img,sxu,syu,suwidth,suheight,x,y, 25,25);
         }
 
+        const imageCreatorFunc = (r,g,b,a)=>{
+            const imageData = ctx.createImageData(SQR_SIZE, SQR_SIZE);
+            // Iterate through every pixel
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                // Modify pixel data
+                imageData.data[i + 0] = r;  // R value
+                imageData.data[i + 1] = g;  // G value
+                imageData.data[i + 2] = b;  // B value
+                imageData.data[i + 3] = a;  // A value
+            }
+            return imageData;
+        }
+        const zocImage = imageCreatorFunc(20,20,20,100);
+        const clearImage = imageCreatorFunc(0,0,0,0);
+
         return snapshotMsg=>{          
 
             //Find terrain array
@@ -302,6 +317,11 @@
                 for(const ba of base.area){
                     setOccupiedFunc(ba);
                     drawBase(ba.col,ba.row);
+                }
+                for(const zoc of base.zoc){
+                    const col = zoc.col;
+                    const row = zoc.row;
+                    ctxBase.putImageData( zocImage , col*SQR_SIZE, row*SQR_SIZE);
                 }
             }
             const unitArray = snapshotMsg.units;

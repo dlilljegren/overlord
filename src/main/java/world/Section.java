@@ -58,22 +58,26 @@ public class Section {
         assert map != null;
         assert baseGenerator != null;
 
+        this.sectionNo = sectionNo;
+        this.worldDefinition = worldDefinition;
+        this.sectionDefinition = worldDefinition.sectionDefinition;
         this.version = SectionVersion.initial(sectionNo);
 
         this.terrains = map.terrainMap();
         assert this.terrains.keySet().stream().allMatch(worldDefinition.sectionDefinition.inSection) : this.terrains.keySet().stream().filter(worldDefinition.sectionDefinition.inSection.negate()).findFirst().get();
 
-        List<Base<Cord>> baseList = baseGenerator.generateForSection(map);
+        List<Base<Cord>> baseList = baseGenerator.generateForSection(map, sectionNo);
         this.bases = baseList.stream().collect(toUnmodifiableMap(b -> b.center, Function.identity()));
 
         //L.debug("Created [{}] bases",baseList.size());
 
-        assert this.bases.keySet().stream().allMatch(worldDefinition.sectionDefinition.inSection) : format("Base centre: %s", this.bases.keySet());
+
+        //Check that all bases are completely within the area of the master rectangle
+        assert this.bases.values().stream().flatMap(b -> b.area.stream()).allMatch(worldDefinition.section.isSectionMaster(sectionNo)) : format("Section:[%d] Base centre:[%s] first bad area:[%s]", sectionNo, this.bases.keySet(),
+                this.bases.values().stream().flatMap(b -> b.area.stream()).filter(worldDefinition.section.isSectionMaster(sectionNo).negate()).findFirst().get());
 
 
-        this.sectionNo = sectionNo;
-        this.worldDefinition = worldDefinition;
-        this.sectionDefinition = worldDefinition.sectionDefinition;
+
 
         this.neighbours = SectorNeighbours.create(worldDefinition, sectionNo);
 

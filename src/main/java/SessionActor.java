@@ -136,18 +136,16 @@ public class SessionActor extends AbstractActor {
     private Receive createPlaying() {
         return receiveBuilder()
                 .match(CursorMessage.CursorState.class, this::process)//Other players are moving the cursor in this players sector
+                .match(ClientMessage.class, this::toSink)
                 .match(ClientCommand.MoveCursor.class, this::process)
                 .match(ClientCommand.AddUnit.class, this::process)
                 .match(ClientCommand.RemoveUnit.class, this::process)
                 .match(ClientCommand.GoToSection.class, this::process)
                 .match(SectionReply.Snapshot.class, this::process)
-                .match(ClientMessage.AddUnit.class, this::toSink)
-                .match(ClientMessage.InfoMsg.class, this::toSink)
                 .match(PlayerMessage.UnitStatus.class, this::toSink)
                 .match(ViewUpdate.Snapshot.class, this::toSink)
                 .match(ViewUpdate.Delta.class, this::toSink)
                 .match(SectorCombatStats.class, this::toSink)
-                .match(SectionBroadcastMessage.ZoneOfControl.class, this::process)
                 .match(SectionBroadcastMessage.CombatInfo.class, this::process)
                 .match(DistributedPubSubMediator.SubscribeAck.class, this::process)
                 .match(DistributedPubSubMediator.UnsubscribeAck.class, this::process)
@@ -285,10 +283,6 @@ public class SessionActor extends AbstractActor {
             this.toSink(combatInfo);
     }
 
-    private void process(SectionBroadcastMessage.ZoneOfControl message) {
-        log.debug("Received ZoneOfControl [{}] forwarding to sink", message);
-        this.toSink(message);
-    }
 
     private void process(DistributedPubSubMediator.UnsubscribeAck unsubscribeAck) {
         log.info("Unsubscribed ok to topic [{}]", unsubscribeAck.unsubscribe().topic());

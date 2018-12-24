@@ -174,6 +174,7 @@ public class WorldDefinition {
      * @param sectionNo
      * @return
      */
+    @Deprecated
     Predicate<Cord> masterRectangle(int sectionNo) {
         boolean fn = section.isNorthernBorder(sectionNo);
         boolean fw = section.isWesternBorder(sectionNo);
@@ -260,8 +261,10 @@ public class WorldDefinition {
         }
 
         public Predicate<Cord> isSectionMaster(Integer sectionNo) {
-            return WorldDefinition.this.masterRectangle(sectionNo);
+            var mr = masterRectangle(sectionNo);
+            return c -> mr.insideMasterRect(c);
         }
+
 
 
         public MasterRectangle masterRectangle(Integer sectionNo) {
@@ -295,14 +298,16 @@ public class WorldDefinition {
                 var offsetCol = section.isWesternBorder(sectionNo) ? 0 : colSectionOverlap;
                 var offsetRow = section.isNorthernBorder(sectionNo) ? 0 : rowSectionOverlap;
                 var masterWidth = sectionWidth() - offsetCol - 1;//-1 to keep them inside i.e <=
-                var masterHeight = sectionWidth() - offsetRow - 1;
+                var masterHeight = sectionHeight() - offsetRow - 1;
 
                 NW = nw.add(offsetCol, offsetRow);
                 NE = NW.add(masterWidth, 0);
                 SW = NW.add(0, masterHeight);
                 SE = SW.add(masterWidth, 0);
+            }
 
-
+            boolean insideMasterRect(Cord c) {
+                return c.col >= NW.col && c.col <= NE.col && c.row >= NW.row && c.row <= SW.row;
             }
         }
     }

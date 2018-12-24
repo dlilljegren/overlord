@@ -12,6 +12,7 @@ import changes.ViewUpdate;
 import changes.ViewUpdateBuilder;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import games.GameDefinition;
 import messages.*;
 import messages.SectionReply.Snapshot;
@@ -20,10 +21,12 @@ import world.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toUnmodifiableMap;
 
@@ -68,8 +71,11 @@ public class ViewActor extends AbstractActor {
                 .match(SectionBroadcastMessage.UnitAdded.class, this::process)
                 .match(SectionBroadcastMessage.UnitRemoved.class, this::process)
                 .match(SectionBroadcastMessage.CombatResult.class, this::process)
+                .match(SectionBroadcastMessage.ZoneOfControl.class, this::process)
+                .matchAny(o -> log.info("received unsupported message [{}] when in state playing", o))
                 .build();
     }
+
 
     @Override
     public void preStart() {
@@ -196,6 +202,26 @@ public class ViewActor extends AbstractActor {
 
     private void process(SectionBroadcastMessage.UnitRemoved unitRemoved) {
         toSession(unitRemoved);
+    }
+
+    private void process(SectionBroadcastMessage.ZoneOfControl zoneOfControl) {
+        int section = zoneOfControl.sectionNo;
+        Function<Cord, WorldCord> worldCord = view.sectionToView(section);
+        Map<Team, Set<WorldCord>> teamToCord = zoneOfControl.controlledCells.stream()
+                .filter(cc -> cc.bestTeam().isPresent()).
+                        collect(Collectors.groupingBy(
+                                cc -> cc.bestTeam().get(),
+                                Maps::newHashMap,
+                                Collectors.mapping(cc -> worldCord.apply(cc.cord), Collectors.toUnmodifiableSet())
+                        ));
+
+        var msg = new ClientMessage.ZoneOfControl(zoneOfControl.sectionNo, teamToCord, zoneOfControl.calculationInfo.elapsed);
+
+
+        toSession(msg);
+
+        //Verify that the section only send out ZoC for the cells it controls
+        assert zoneOfControl.controlledCells.stream().map(CellControl::cord).allMatch(worldDefinition.section.isSectionMaster(section));
     }
 
     private void toSession(Object msg) {
