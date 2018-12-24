@@ -6,10 +6,7 @@ import games.Rules;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.IntFunction;
-import java.util.function.Predicate;
+import java.util.function.*;
 
 public class WorldDefinition {
 
@@ -211,6 +208,11 @@ public class WorldDefinition {
         private final ConcurrentMap<Integer, MasterRectangle> masterRectangleCache;
         public final Predicate<Integer> isValidSectionNo = sectionNo -> sectionNo >= 0 && sectionNo < world.totalSections;
 
+        /**
+         * Transform a cord into an array index for faster lookups compared to Map
+         */
+        public final ToIntFunction<Cord> cordHash;
+
         private SectionTranslations(int sectionWidth, int sectionHeight) {
             this.hsw = sectionWidth / 2;
             this.hsh = sectionHeight / 2;
@@ -224,6 +226,8 @@ public class WorldDefinition {
             );
 
             this.masterRectangleCache = Maps.newConcurrentMap();
+
+            this.cordHash = c -> c.col + c.row * sectionWidth;
         }
 
         public WorldCord worldOrigo(int sectionNo) {

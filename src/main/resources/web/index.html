@@ -87,7 +87,7 @@
         };
         const canPlaceFunc =(col,row) => !occupied.has( hashFunc(col,row ));
         const unitAddProcessor = createUnitAddProcessor(setOccupied);
-
+        const zocProcessor = createZocProcessor();
 
         webWorker.onmessage = function(msg){
             var ul = document.getElementById("out");
@@ -104,6 +104,9 @@
 
             if(type=="AddUnit"){
                 unitAddProcessor(payload);
+            }
+            else if(type=="ZoneOfControl"){
+                zocProcessor(payload);
             }
             else if(type == "AssignPlayer"){
                 document.getElementById("playerName").value = payload.player.name;
@@ -362,6 +365,37 @@
         }
     }
 
+    function createZocProcessor(){
+        const zocCanvas = document.getElementById('zocCanvas');
+        const ctxZoc = zocCanvas.getContext('2d');
+
+        const imageCreatorFunc = (r,g,b,a)=>{
+            const imageData = ctxZoc.createImageData(SQR_SIZE, SQR_SIZE);
+            // Iterate through every pixel
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                // Modify pixel data
+                imageData.data[i + 0] = r;  // R value
+                imageData.data[i + 1] = g;  // G value
+                imageData.data[i + 2] = b;  // B value
+                imageData.data[i + 3] = a;  // A value
+            }
+            return imageData;
+        }
+        const teamToImage = new Map();
+        teamToImage.set("Red",imageCreatorFunc(155,0,0,100));
+        teamToImage.set("Blue",imageCreatorFunc(0,0,155,100));
+        const clearImage = imageCreatorFunc(0,0,0,0);
+        
+        return zocMessage=>{
+            for( let[team,cords] of Object.entries(zocMessage.teamToCords)){
+                const img = teamToImage.get(team);
+                for(c of cords){
+                    ctxZoc.putImageData(img,c.col*SQR_SIZE,c.row*SQR_SIZE);
+                }
+            }
+        }
+    }
+
     function createInitGameProcessor(){
         const gameDef = document.getElementById('game_dimension');
         const sectDef = document.getElementById('section_dimension');        
@@ -386,6 +420,7 @@
         const sectionCanvas = document.getElementById('sectionCanvas');
         const baseCanvas = document.getElementById('baseCanvas');
         const unitCanvas = document.getElementById('unitCanvas');
+        const zocCanvas = document.getElementById('zocCanvas');
         
         const viewDef = document.getElementById('view_dimension');
         const sectionLabel = document.getElementById('sectionLabel');
@@ -431,6 +466,7 @@
             setCanvasSize(baseCanvas, widthRequired,heightRequired);
             setCanvasSize(sectionCanvas, widthRequired,heightRequired);
             setCanvasSize(unitCanvas, widthRequired,heightRequired);
+            setCanvasSize(zocCanvas, widthRequired,heightRequired);
             
 
             var pattern = ctx.createPattern(bgImage, 'repeat');
@@ -572,7 +608,9 @@
         <canvas id="baseCanvas" style="position: absolute;" width="100%" height="100%"></canvas>
         <canvas id="unitCanvas" style="position: absolute;" width="100%" height="100%"></canvas>
         <canvas id="sectionCanvas" style="position: absolute;" width="100%" height="100%"></canvas>
+        <canvas id="zocCanvas" style="position: absolute;" width="100%" height="100%"></canvas>
         <canvas id="selectionCanvas" style="position: absolute;" width="100%" height="100%"></canvas>
+
 
     </div>
 </div>

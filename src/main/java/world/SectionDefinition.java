@@ -74,7 +74,12 @@ public abstract class SectionDefinition {
 
 
     public Stream<Cord> fillArea(Predicate<Cord> geometry) {
-        return all().filter(geometry);
+        return all().filter(geometry).filter(this::inSection);
+    }
+
+    public Stream<Cord> cordsInCircle(Cord cord, int radius) {
+        //ToDo this is slow
+        return fillArea(circleArea(cord, radius));
     }
 
 

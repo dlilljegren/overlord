@@ -318,6 +318,8 @@ public class Section {
 
     public Stream<CellControl> calculateZoneOfControl() {
         ZoneOfControlCalculator zoneOfControlCalculator = new ZoneOfControlCalculator(this.worldDefinition.sectionDefinition, this.units, Optional.empty());
+
+
         return zoneOfControlCalculator.result();
     }
 

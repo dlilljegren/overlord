@@ -13,6 +13,7 @@ import java.util.stream.Stream;
 
 /**
  * Calculate for each cord which team is in control of the cord, Players can only place units on cords under there control
+ * ToDo should be made reusable to minimize GC
  */
 class ZoneOfControlCalculator {
 

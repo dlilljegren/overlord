@@ -11,7 +11,7 @@ public interface Rules {
     }
 
     /**
-     * Zone of Control point are given to all cells within 3 of distance
+     * Zone of Control point are given to all cells were distance is less than this
      *
      * @return
      */

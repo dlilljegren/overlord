@@ -6,6 +6,8 @@ import world.*;
 
 import javax.annotation.Nonnull;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public abstract class SectionBroadcastMessage {
 
@@ -73,6 +75,25 @@ public abstract class SectionBroadcastMessage {
                     .add("controlledCells", controlledCells.size())
                     .add("calculationInfo", calculationInfo)
                     .toString();
+        }
+    }
+
+    public static class ZoneOfControlSnapshot extends SectionBroadcastMessage {
+        public final Map<Team, Cord> teamToCord;
+
+        public ZoneOfControlSnapshot(int sectorNo, Map<Team, Cord> teamToCord) {
+            super(sectorNo);
+            this.teamToCord = teamToCord;
+        }
+    }
+
+    @CompiledJson(onUnknown = CompiledJson.Behavior.IGNORE)
+    public static class ZoneOfControlDelta extends ZoneOfControlSnapshot {
+        public final Set<Cord> removed;
+
+        public ZoneOfControlDelta(int sectorNo, Map<Team, Cord> teamToCord, Set<Cord> removed) {
+            super(sectorNo, teamToCord);
+            this.removed = removed;
         }
     }
 
