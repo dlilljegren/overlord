@@ -1,0 +1,47 @@
+{
+  "sectorVersion": {
+    "time": "2018-10-03T23:53:44.555958100Z",
+    "version": 1,
+    "section": 0
+  },
+  "change": "Snapshot",
+  "units": {
+    "added": [
+      {
+        "unit": {
+          "team": "red"
+        },
+        "at": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "unit": {
+          "team": "red"
+        },
+        "at": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "unit": {
+          "team": "red"
+        },
+        "at": {
+          "col": 0,
+          "row": -1
+        }
+      }
+    ],
+    "removed": []
+  },
+  "terrains": {
+    "added": [],
+    "removed": []
+  },
+  "bases": {
+    "added": []
+  }
+}

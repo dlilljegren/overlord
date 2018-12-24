@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<br lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test WebSocket</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/pure-min.css"
+          integrity="sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w" crossorigin="anonymous">
+
+    <style>
+        body {
+          background-color: powderblue;
+        }
+        h1  {
+          color: blue;
+        }
+
+        .canvas-wrapper{
+            position: relative;
+            border:2px solid #222222;
+        }
+
+        .canvas-wrapper canvas {
+            top: 0;
+            left: 0;
+            margin: 20px;
+            border:1px solid #000000;
+        }
+
+        .mainSection-label{
+            margin-left: 20px;
+        }
+
+
+    </style>
+
+    <script type="text/javascript" src="src/ClientCommandBuilder.js" async></script>
+    <script type="text/javascript" src="src/ImageFactory.js" async></script>
+    <script type="text/javascript">
+    const SQR_SIZE = 25;
+
+
+    var i=0;
+    console.info("Here "+i++);
+    var webWorker;
+    function connect(){
+        if(webWorker){
+            var closeMsg = {
+                cmd:"close"
+            }
+            webWorker.postMessage(closeMsg);
+        }
+        webWorker = new Worker("src/WebsocketWorker.js");
+
+        let initGameMsg;
+        let initViewMsg;
+        let snapshotProcessor;        
+        let mouseOverListener;
+        let mouseClickListener;
+       
+        const initGameProcessor = createInitGameProcessor();
+        const initViewProcessor = createInitViewProcessor();
+
+        const feedbackLabel = document.getElementById("feedbackLabel");
+        const statusFeedBack= s=>{
+            feedbackLabel.innerText=s;
+            if(s !=""){   
+                setTimeout(function(){ statusFeedBack(""); }, 3000);            
+            }                      
+            console.log("Status:"+s);
+        }
+        const clearLog = ()=>{
+                const node = document.getElementById("out");
+                var cNode = node.cloneNode(false);
+                node.parentNode.replaceChild(cNode ,node);
+            }
+
+        const occupied = new Set();
+        const hashFunc = (c,r) => c*10000+r;
+        const setOccupied = (cord,remove)=>{
+            const h = hashFunc(cord.col,cord.row);
+            if(remove){
+                occupied.delete(h);
+            }
+            else{
+                occupied.add(h);
+            }
+        };
+        const canPlaceFunc =(col,row) => !occupied.has( hashFunc(col,row ));
+        const unitAddProcessor = createUnitAddProcessor(setOccupied);
+
+
+        webWorker.onmessage = function(msg){
+            var ul = document.getElementById("out");
+            var li = document.createElement("li");
+
+            var text = document.createTextNode(JSON.stringify(msg.data));
+            li.appendChild(text);
+            ul.appendChild(li);
+
+            var type = msg.data.message;
+            var payload = msg.data.data;
+
+           
+
+            if(type=="AddUnit"){
+                unitAddProcessor(payload);
+            }
+            else if(type == "AssignPlayer"){
+                document.getElementById("playerName").value = payload.player.name;
+                document.getElementById("teamName").value = payload.player.team;
+            }
+            else if( type=="Snapshot"){
+                occupied.clear();
+                if(snapshotProcessor){
+                    snapshotProcessor( payload);                    
+                    mouseOverListener = setupMouseOver(initViewMsg,mouseOverListener,canPlaceFunc);
+                    //initGameMsg,previousListener,canPlace, hasUnit,sendAdd,sendRemove
+                    mouseClickListener = setupMouseClick(initViewMsg, mouseClickListener, canPlaceFunc, (col,row)=>false,addUnit,removeUnit,statusFeedBack );
+                }
+                else{
+                    console.error("InitGame has not been called");
+                }
+
+            }
+            else if( type =="InitGame"){
+                clearLog();
+                initGameMsg = payload;
+                initGameProcessor(payload);
+                snapshotProcessor= createSnapshotProcessor(payload,setOccupied);                
+            }
+            else if(type =="InitView"){
+                initViewMsg = payload;
+                mouseOverListener = setupMouseOver(initViewMsg,mouseOverListener,(c,r)=>true);
+                initViewProcessor(payload);
+            }
+            else if(type=="InfoMsg"){
+                statusFeedBack(payload.message);
+            }
+        }
+
+
+        var msg = {
+		    cmd:"connect",
+		    connectInfo :{
+			    wsUri:"ws://127.0.0.1:8082/ws"
+		    }
+	    };
+	    webWorker.postMessage(msg);
+    }
+
+    function addUnit(col,row){
+        webWorker.postMessage(addUnitAt(col,row));
+    }
+    function removeUnit(col,row){
+        webWorker.postMessage(removeUnitAt(col,row));
+    }
+
+    function login(){
+        var cookie = document.getElementById("cookie").value
+        webWorker.postMessage(makeLoginMsg(cookie));
+    }
+
+
+
+
+    function initCanvas(){
+        var canvas = document.getElementById('bgCanvas');
+        var ctx = canvas.getContext('2d');
+
+        var img = new Image();
+        img.src = 'img/squares_small.png';
+        img.onload = function() {
+            var pattern = ctx.createPattern(img, 'repeat');
+            ctx.fillStyle = pattern;
+            ctx.fillRect(0, 0, 600, 300);
+        }
+    }
+
+    function mark(){
+        const canvas = document.getElementById('selectionCanvas');
+        var ctx = canvas.getContext('2d');
+        const imageData = ctx.createImageData(SQR_SIZE, SQR_SIZE);
+        // Iterate through every pixel
+        for (let i = 0; i < imageData.data.length; i += 4) {
+            // Modify pixel data
+            imageData.data[i + 0] = 190;  // R value
+            imageData.data[i + 1] = 0;    // G value
+            imageData.data[i + 2] = 210;  // B value
+            imageData.data[i + 3] = 100;  // A value
+        }
+        ctx.putImageData(imageData, 2*SQR_SIZE, 2*SQR_SIZE);
+    }
+
+    function addHill(x,y){
+        const canvas = document.getElementById('terrainCanvas');
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(HILL, x* SQR_SIZE, y * SQR_SIZE);
+    }
+
+    function drawPiece(x,y){
+        const canvas = document.getElementById('terrainCanvas');
+        var ctx = canvas.getContext('2d');
+        //context.drawImage(img,sx,sy,swidth,sheight,x,y,width,height);
+        const sx = 10 * 64;
+        const sy = 2 * 64;
+        const swidth=64;
+        const sheight=64;
+
+        ctx.drawImage(RED,sx,sy,swidth,sheight,x*SQR_SIZE,y*SQR_SIZE, 25,25);
+    }
+
+    
+
+    function drawBaseTest(x,y){
+        const baseCanvas = document.getElementById('baseCanvas');
+        const ctxBase = baseCanvas.getContext('2d');
+
+        ctxBase.drawImage(BLACK_BASE,0,0,64,64,x*SQR_SIZE,y*SQR_SIZE, 25,25);
+    }
+
+
+    function goSection(){
+        let mainSection = document.getElementById("goToSection").value;
+        if(!mainSection) mainSection =0;
+        webWorker.postMessage(goToSection(mainSection));
+    }
+
+    //Create a function that captures the variables we need
+    //Function will apply the StateChanged message
+    function createSnapshotProcessor(initGameMsg, setOccupiedFunc){
+        
+        const terrainCanvas = document.getElementById('terrainCanvas');
+        const ctx = terrainCanvas.getContext('2d');
+
+        const baseCanvas = document.getElementById('baseCanvas');
+        const ctxBase = baseCanvas.getContext('2d');
+
+        const unitCanvas = document.getElementById('unitCanvas');
+        const ctxUnit = unitCanvas.getContext('2d');
+
+        const xOffset = 0;
+        const yOffset = 0;
+
+        const terrainMap = new Map();
+        terrainMap.set("Hill",HILL);
+        terrainMap.set("Water",WATER);
+
+        addImageFunc = (img,x,y)=>{
+            ctx.drawImage(img,x,y);
+        }
+
+        addTerrainFunc = (name,cord)=>{
+            const col = cord.col+xOffset;
+            const row = cord.row+yOffset;
+            const img = terrainMap.get(name);
+            addImageFunc(img, col*SQR_SIZE, row * SQR_SIZE);
+        }
+
+        const sx = 10 * 64;
+        const sy = 2 * 64;
+        const swidth=64;
+        const sheight=64;
+        drawBase = (x,y)=>{
+            ctxBase.drawImage(BLACK_BASE,0,0,64,64,x*SQR_SIZE+2,y*SQR_SIZE-2, 23,23);
+        }
+
+
+        //Draw unit
+        const teamMap = new Map();
+        teamMap.set("Red",RED);
+        teamMap.set("Blue",BLUE);
+        teamMap.set("Black",BLACK);
+        
+        const sxu = 10 * 64;
+        const syu = 2 * 64;
+        const suwidth=64;
+        const suheight=64;
+        drawUnit =(cord,unit)=>{
+            const x = cord.col*SQR_SIZE;
+            const y = cord.row*SQR_SIZE;
+            
+            let img = teamMap.get(unit.team);
+            if(!img) img = teamMap.get("Black");
+
+            ctxUnit.drawImage(img,sxu,syu,suwidth,suheight,x,y, 25,25);
+        }
+
+        return snapshotMsg=>{          
+
+            //Find terrain array
+            const terrainArray = snapshotMsg.terrains;
+            for(const e of terrainArray){
+                const name = e.e;
+                const cord  = e.at;
+                setOccupiedFunc(cord)
+                addTerrainFunc(name,cord);
+            }
+            //Find base array
+            const baseArray = snapshotMsg.bases;
+            for(const b of baseArray ){
+                const base = b.e;
+                for(const ba of base.area){
+                    setOccupiedFunc(ba);
+                    drawBase(ba.col,ba.row);
+                }
+            }
+            const unitArray = snapshotMsg.units;
+            for(const b of unitArray){                
+                setOccupiedFunc(b.at);
+                drawUnit(b.at,b.e)
+            }
+        }
+    }
+
+    function createUnitAddProcessor(setOccupied){
+        const unitCanvas = document.getElementById('unitCanvas');
+        const ctxUnit = unitCanvas.getContext('2d');
+
+        //Draw unit
+        const teamMap = new Map();
+        teamMap.set("Red",RED);
+        teamMap.set("Blue",BLUE);
+        teamMap.set("Black",BLACK);
+        
+        const sxu = 10 * 64;
+        const syu = 2 * 64;
+        const suwidth=64;
+        const suheight=64;
+        drawUnit =(cord,unit)=>{
+            const x = cord.col*SQR_SIZE;
+            const y = cord.row*SQR_SIZE;
+            
+            let img = teamMap.get(unit.team);
+            if(!img) img = teamMap.get("Black");
+
+            ctxUnit.drawImage(img,sxu,syu,suwidth,suheight,x,y, 25,25);
+        }
+
+        return unitAddMsg=>{
+            setOccupied(unitAddMsg.cord);
+            drawUnit(unitAddMsg.cord,unitAddMsg.unit);
+        }
+    }
+
+    function createInitGameProcessor(){
+        const gameDef = document.getElementById('game_dimension');
+        const sectDef = document.getElementById('section_dimension');        
+
+        const setCanvasSize=(c,w,h)=>{
+            c.width=w;
+            c.height=h;
+        }
+
+
+        return initGameMsg =>{
+            gameDef.innerText = initGameMsg.worldWidth   + " x " + initGameMsg.worldHeight;
+            sectDef.innerText = initGameMsg.sectionWidth + " x " + initGameMsg.sectionHeight;
+        }
+    }
+
+    function createInitViewProcessor(){
+        const canvasWrapper = document.getElementById('canvasWrapper');
+        const bgCanvas = document.getElementById('bgCanvas');
+        const terrainCanvas = document.getElementById('terrainCanvas');
+        const selectionCanvas = document.getElementById('selectionCanvas');
+        const sectionCanvas = document.getElementById('sectionCanvas');
+        const baseCanvas = document.getElementById('baseCanvas');
+        const unitCanvas = document.getElementById('unitCanvas');
+        
+        const viewDef = document.getElementById('view_dimension');
+        const sectionLabel = document.getElementById('sectionLabel');
+
+        const bgImage = loadImage('squares_small.png');
+        const sectionCtx = sectionCanvas.getContext('2d');
+        
+        //Draw the background
+        var ctx = bgCanvas.getContext('2d');
+
+        const setCanvasSize=(c,w,h)=>{
+            c.width=w;
+            c.height=h;
+        }
+
+        const drawLine=(ctx,start,end)=>{
+            ctx.beginPath();
+            ctx.moveTo(start.col*SQR_SIZE, start.row*SQR_SIZE);
+            ctx.lineTo(end.col*SQR_SIZE, end.row*SQR_SIZE);
+            ctx.stroke();            
+        }
+
+        return initViewMsg =>{
+            const vd = initViewMsg.viewDefinition;
+
+            viewDef.innerText =  `[${vd.origo.col}->${vd.width} :  ${vd.origo.row}->${vd.width}]`;
+
+            //Set mainSection
+            const si = initViewMsg.sectionVersion;
+            sectionLabel.innerText=`Section: ${vd.mainSection}`;
+
+            const widthRequired = vd.width * SQR_SIZE;
+            const heightRequired = vd.height * SQR_SIZE;
+
+            //Configure the canvas
+            //See https://stackoverflow.com/questions/331052/how-to-resize-html-canvas-element
+            canvasWrapper.style.width = widthRequired+40;
+            canvasWrapper.style.height = heightRequired+40;
+
+            setCanvasSize(bgCanvas, widthRequired,heightRequired);
+            setCanvasSize(terrainCanvas, widthRequired,heightRequired);
+            setCanvasSize(selectionCanvas, widthRequired,heightRequired);
+            setCanvasSize(baseCanvas, widthRequired,heightRequired);
+            setCanvasSize(sectionCanvas, widthRequired,heightRequired);
+            setCanvasSize(unitCanvas, widthRequired,heightRequired);
+            
+
+            var pattern = ctx.createPattern(bgImage, 'repeat');
+            ctx.fillStyle = pattern;
+            ctx.fillRect(0, 0, widthRequired, heightRequired);
+
+            //Draw the view borders            
+
+            const map = new Map(Object.entries(initViewMsg.sectionBorders));//Can't just take the raw JSON objects
+            for (let [section, borders] of map.entries()) {
+                const bordersMap = new Map(Object.entries(borders.borders))
+                for (let [direction, line] of bordersMap.entries()){
+                    sectionCtx.strokeStyle = "#FF0000";
+                    sectionCtx.setLineDash([15, 2]);
+                    if(direction=='North'){
+                        line.end.col++;
+                        
+                    }
+                    else if(direction=='West'){
+                        line.end.row++;                        
+                    }
+                    else if(direction=='South'){
+                        line.start.row++;                        
+                        line.end.row++;                        
+                    }
+                    else if(direction=='East'){
+                        line.start.col++;                        
+                        line.end.col++;
+                        line.end.row++;                         
+                    }   
+                    drawLine(sectionCtx,line.start,line.end);                     
+                }
+            }
+        }
+    }
+
+   
+
+    function setupMouseOver(initViewMsg,previousListener, canPlaceFunc ){
+        const selectionCanvas = document.getElementById('selectionCanvas');
+        const mouseOverLabel = document.getElementById('mouseOverLabel');
+        const ctx = selectionCanvas.getContext('2d');
+
+        const offsetCord = initViewMsg.viewDefinition.origo;
+        const xOffset = offsetCord.col;
+        const yOffset = offsetCord.row;
+
+        const target = selectionCanvas;
+        if(previousListener){
+            target.removeEventListener("mousemove",previousListener,true);
+        }
+
+        const imageCreatorFunc = (r,g,b,a)=>{
+            const imageData = ctx.createImageData(SQR_SIZE, SQR_SIZE);
+            // Iterate through every pixel
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                // Modify pixel data
+                imageData.data[i + 0] = r;  // R value
+                imageData.data[i + 1] = g;  // G value
+                imageData.data[i + 2] = b;  // B value
+                imageData.data[i + 3] = a;  // A value
+            }
+            return imageData;
+        }
+        const moImage = imageCreatorFunc(190,0,210,100);
+        const clearImage = imageCreatorFunc(0,0,0,0);
+        const cordToImageFunc = (colServer,rowServer)=> canPlaceFunc(colServer,rowServer) ? moImage : NO;
+
+        let col,row;
+        const newListener = e=>{
+            //Delete the last
+            ctx.putImageData(clearImage, col*SQR_SIZE, row*SQR_SIZE);
+
+            const x = e.offsetX;
+            const y = e.offsetY;
+
+            col = Math.floor(x / SQR_SIZE);
+            row = Math.floor(y / SQR_SIZE);
+
+            const colServerWorld= col +xOffset;
+            const rowServerWorld = row +yOffset;
+
+            mouseOverLabel.innerHTML = `Mouse <b>World:${colServerWorld}:${rowServerWorld} View:${col}:${row}</b> [${x}:${y}]`;
+            ctx.putImageData( cordToImageFunc(col,row) , col*SQR_SIZE, row*SQR_SIZE);
+
+        };
+        target.addEventListener("mousemove",newListener,true);
+
+        return newListener;
+    }
+
+    function setupMouseClick(initViewMsg,previousListener,canPlace, hasUnit,sendAdd,sendRemove,statusFeedBack){
+        const selectionCanvas = document.getElementById('selectionCanvas');
+        const offsetCord = initViewMsg.viewDefinition.origo;
+        
+        const target = selectionCanvas;
+        if(previousListener){
+            target.removeEventListener("click",previousListener,true);
+        }
+
+        const newListener = e=>{
+            const x = e.offsetX;
+            const y = e.offsetY;
+
+            col = Math.floor(x / SQR_SIZE);
+            row = Math.floor(y / SQR_SIZE);
+
+            const colView = col;
+            const rowView = row;
+
+            if(!canPlace(colView,rowView)){
+                statusFeedBack("Can't place here");
+                return;
+            } 
+
+            if(hasUnit(colView,rowView)) {
+                sendRemove(colView,rowView);
+            }
+            else{
+                sendAdd(colView,rowView);
+            }
+        };
+        target.addEventListener("click",newListener,false);
+    }
+
+
+
+    </script>
+</head>
+
+<body>
+<div width="100%">
+    <label id="sectionLabel" class="mainSection-label">Section</label>
+    <label id="mouseOverLabel" class="mouse-label">Mouseover</label>
+    <label id="feedbackLabel"></label>
+    <div id="canvasWrapper" class="canvas-wrapper">
+        <canvas id="bgCanvas" class=".pure-img" width="100%" height="100%"></canvas>
+        <canvas id="terrainCanvas" style="position: absolute;" width="100%" height="100%"></canvas>
+        <canvas id="baseCanvas" style="position: absolute;" width="100%" height="100%"></canvas>
+        <canvas id="unitCanvas" style="position: absolute;" width="100%" height="100%"></canvas>
+        <canvas id="sectionCanvas" style="position: absolute;" width="100%" height="100%"></canvas>
+        <canvas id="selectionCanvas" style="position: absolute;" width="100%" height="100%"></canvas>
+
+    </div>
+</div>
+
+
+<div class="pure-g">
+    <div class="pure-u-1-3">
+
+        <fieldset class="pure-group">
+            <legend>Connect</legend>
+            <span class="pure-form-message">Connect websocket</span>
+            <button class="pure-button pure-button-primary" onclick="connect();">Connect</button>
+
+        </fieldset>
+
+        <fieldset class="pure-group">
+            <legend>Login</legend>
+            <span class="pure-form-message">Send the login</span>
+            <input id="cookie" placeholder="Email" value="ABC">
+            <button class="pure-button pure-button-primary" onclick="login();">Login</button>
+        </fieldset>
+
+        <fieldset class="pure-group">
+            <legend>Units</legend>
+            <label for="addUnit">Add Unit</label>
+            <input id="addUnit" placeholder="1:1">
+            <button class="pure-button pure-button-primary" onclick="addUnit(1,1);">Add Unit</button>
+
+            <label for="notused" class="pure-checkbox">
+                <input id="notused" type="checkbox"> Not used
+            </label>
+        </fieldset>
+
+
+        <fieldset class="pure-group">
+            <legend>Player Info</legend>
+            <div class="pure-g">
+                <div class="pure-u-5-24">
+                    <div><label>Player</label></div>
+                    <label>Team</label>
+                </div>
+                <div class="pure-u-19-24">
+                    <input id="playerName" placeholder="Not logged in" disabled/>
+                    <input id="teamName" placeholder="Unknown" disabled/>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="pure-group">
+            <legend>World Info</legend>
+            <div class="pure-g">
+                <div class="pure-u-16-24">
+                    <div><label>Game Dimension</label></div>
+                    <label>Section Dimension</label>
+                </div>
+                <div class="pure-u-8-24">
+                    <div><label id="game_dimension">6x6</label></div>
+                    <label id="section_dimension">7x7</label>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="pure-group">
+            <legend>View Info</legend>
+            <div class="pure-g">
+                <div class="pure-u-16-24">
+                    <div><label>View Dimension</label></div>
+                    <div><input id="goToSection" placeholder="0"/></div>
+                </div>
+                <div class="pure-u-8-24">
+                    <div><label id="view_dimension">6x6</label></div>
+                    <button class="pure-button pure-button-primary" onclick="goSection();">Go mainSection</button>
+                </div>
+            </div>
+        </fieldset>
+
+
+        <fieldset class="pure-group">
+            <span class="pure-form-message">Canvas</span>
+            <button class="pure-button pure-button-primary" onclick="initCanvas();">Draw</button>
+            <button class="pure-button pure-button-primary" onclick="mark();">Mark</button>
+            <button class="pure-button pure-button-primary" onclick="addHill(3,3);">Draw Hill</button>
+            <button class="pure-button pure-button-primary" onclick="drawPiece(4,4);">Draw Piece</button>
+            <button class="pure-button pure-button-primary" onclick="drawBaseTest(4,4);">Draw Base</button>
+        </fieldset>
+
+
+    </div>
+    <div class="pure-u-2-3">
+
+
+        <ul id="out" style="width:100%; background-color:gray"></ul>
+    </div>
+
+</div>
+<div>Icons made by <a href="https://www.flaticon.com/authors/ocha" title="OCHA">OCHA</a> from <a
+        href="https://www.flaticon.com/" title="Flaticon">www.flaticon.com</a> is licensed by <a
+        href="http://creativecommons.org/licenses/by/3.0/" title="Creative Commons BY 3.0" target="_blank">CC 3.0 BY</a>
+</div>
+</body>
+
+

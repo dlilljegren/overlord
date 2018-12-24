@@ -1,0 +1,94 @@
+{
+  "units": {
+    "added": [
+      {
+        "unit": {
+          "team": {
+            "name": "red"
+          }
+        },
+        "at": {
+          "row": 0,
+          "col": 0
+        }
+      },
+      {
+        "unit": {
+          "team": {
+            "name": "red"
+          }
+        },
+        "at": {
+          "row": 1,
+          "col": 0
+        }
+      },
+      {
+        "unit": {
+          "team": {
+            "name": "red"
+          }
+        },
+        "at": {
+          "row": -1,
+          "col": 0
+        }
+      },
+      {
+        "unit": {
+          "team": {
+            "name": "red"
+          }
+        },
+        "at": {
+          "row": 0,
+          "col": 1
+        }
+      },
+      {
+        "unit": {
+          "team": {
+            "name": "blue"
+          }
+        },
+        "at": {
+          "row": -1,
+          "col": -2
+        }
+      },
+      {
+        "unit": {
+          "team": {
+            "name": "blue"
+          }
+        },
+        "at": {
+          "row": -1,
+          "col": -1
+        }
+      },
+      {
+        "unit": {
+          "team": {
+            "name": "blue"
+          }
+        },
+        "at": {
+          "row": -1,
+          "col": 1
+        }
+      },
+      {
+        "unit": {
+          "team": {
+            "name": "blue"
+          }
+        },
+        "at": {
+          "row": -1,
+          "col": 0
+        }
+      }
+    ]
+  }
+}
