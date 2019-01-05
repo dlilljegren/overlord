@@ -206,7 +206,11 @@ public class ViewActor extends AbstractActor {
     }
 
     private void process(SectionBroadcastMessage.UnitRemoved unitRemoved) {
-        toSession(unitRemoved);
+        int section = unitRemoved.sectionNo;
+        var worldCord = view.sectionToView(section).apply(unitRemoved.cord);
+        var unit = unitRemoved.unit;
+        var msg = new ClientMessage.RemoveUnit(worldCord, unit);
+        toSession(msg);
     }
 
     private void process(SectionBroadcastMessage.ZoneOfControl zoneOfControl) {

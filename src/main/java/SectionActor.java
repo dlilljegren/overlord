@@ -310,7 +310,7 @@ public class SectionActor extends AbstractActorWithTimers {
     }
 
     private void broadcastUnitRemoved(Unit unit, Cord cord) {
-        log.debug("Broadcasting unit [{}] lost from cord:[{}]", unit, cord);
+        log.debug("Broadcasting unit [{}] removed from cord:[{}]", unit, cord);
         broadcast(new SectionBroadcastMessage.UnitRemoved(sectorNo, unit, cord));
     }
 

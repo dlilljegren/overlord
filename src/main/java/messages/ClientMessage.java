@@ -86,19 +86,37 @@ public abstract class ClientMessage {
         }
     }
 
-    @CompiledJson(onUnknown = CompiledJson.Behavior.IGNORE)
-    public static class AddUnit extends ClientMessage {
+    private static class UnitMessage extends ClientMessage {
+
         @Nonnull
         public final WorldCord cord;
         @Nonnull
         public final Unit unit;
 
-
-        public AddUnit(@Nonnull WorldCord cord, @Nonnull Unit unit) {
+        private UnitMessage(@Nonnull WorldCord cord, @Nonnull Unit unit) {
             this.cord = cord;
             this.unit = unit;
         }
     }
+
+
+    @CompiledJson(onUnknown = CompiledJson.Behavior.IGNORE)
+    public static class AddUnit extends UnitMessage {
+
+        public AddUnit(@Nonnull WorldCord cord, @Nonnull Unit unit) {
+            super(cord, unit);
+        }
+    }
+
+    @CompiledJson(onUnknown = CompiledJson.Behavior.IGNORE)
+    public static class RemoveUnit extends UnitMessage {
+
+        public RemoveUnit(@Nonnull WorldCord cord, @Nonnull Unit unit) {
+            super(cord, unit);
+        }
+    }
+
+
 
     @CompiledJson(onUnknown = CompiledJson.Behavior.IGNORE)
     public static class ZoneOfControl extends ClientMessage {
