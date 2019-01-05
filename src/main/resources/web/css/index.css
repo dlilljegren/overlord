@@ -1,0 +1,292 @@
+:root {
+  --page-bg-color:#0C0032; 
+  --lighter-bg-color: #240090;
+  --font-color: #AAABB8;
+  --border-color: #3500D3;
+  --box-border-color:#190061;
+  --box-bg-color:#3500D3;
+  --inner-box-bg-color:#190061;
+}
+
+palette{
+  background-color: #0C0032;
+  background-color: #190061;
+  background-color: #240090;
+  background-color: #3500D3;
+  background-color: #282828;
+
+  background-color: #25274D;
+  background-color: #464866;
+  background-color: #AAABB8;
+  background-color: #2E9CCA;
+  background-color: #29648A;
+}
+
+body {
+    background-color: var(--page-bg-color);
+    color: var( --font-color);
+    font-size: 1.1em;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    margin: 10px;
+  }
+
+  .wrapper {
+    display: grid;
+    grid-template-columns: [info_left] 0.5fr [info_right] 0.5fr [main] 5fr [side] 40px;
+    grid-template-rows: [top] 40px [row2] 0.5fr [row3] 0.5fr  [bottom] 40px;
+    grid-gap: 10px;
+    padding: 10px;
+    background-color: var(--border-color);
+    align-items: stretch;
+  }
+  
+  .box {
+    background-color: var(--box-bg-color);
+    color: #fff;
+    border-radius: 5px;
+    /*font-size: 50%;*/
+  }
+
+  .header{
+     grid-column: info_left / -1; 
+     grid-row: top;
+  }
+  .info{
+    grid-column: info_left / main;  
+    grid-row: row2 / bottom;
+    
+  }
+  .info_left{
+    grid-column: info_left / info_right;  
+    grid-row: row2 / bottom;
+  }
+
+  .main{
+    grid-column: main;  
+    grid-row: row2 / bottom;
+
+  }
+
+  .all{
+    grid-column: 1 /-1;
+    grid-row: 1/ -1;
+    z-index: 100;
+    background-color: var(--lighter-bg-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .player_box{
+      grid-column: info_left / main;
+      grid-row: row2;
+      margin: 5px;
+      z-index: 2;
+  }
+  .team_box{
+    grid-column: info_left / main;
+    grid-row: row3;
+    margin: 5px;
+    z-index: 2;
+  }
+
+  .world_box{
+    margin: 5px;
+  }
+
+  .border{
+    border-width: 1mm;
+    border-color: var(--box-border-color);
+    border-style: solid;
+  }
+  .side{
+    grid-column: side;  
+    grid-row: 2/ -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 5px;
+  }
+
+  .side > .button{
+    margin-top: 5px;
+  }
+
+  .bottom{
+    grid-row: bottom;
+  }
+  
+  .content{
+      position: relative;
+      background-color: #fff;
+      overflow: auto;
+     
+      height: 75vh;
+      width: 75vw;
+  }
+  
+  .content > canvas{
+    position: absolute;
+    top:0;
+    left: 0;
+    overflow: visible;
+  }
+
+  .info.bottom{
+      justify-self: stretch;
+      text-align: center;
+      align-self: stretch;
+  }
+
+  #section_label{
+    grid-column: info_left / main; 
+    grid-row: top;
+    
+  }
+
+  .label{
+    font-family: fantasy;
+    font-size: 100%;
+    align-self: stretch;
+    background-color: var(--inner-box-bg-color);
+    margin:2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+ 
+
+  #message_label{
+      grid-column: main / -1;
+      grid-row: top;
+      justify-content: left;
+      padding-left: 5px;
+  }
+
+  .aligner{
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+  }
+
+  .aligned_item{
+    align-self: center;
+    background-color: #999;
+  }
+
+  .aligner2{
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+  }
+
+  .aligner2 > div{
+    background-color: var(--inner-box-bg-color);
+   
+  }
+
+
+  .aligner3{
+    display: flex;
+    align-items: center; 
+    justify-content: flex-start;
+    padding: 3px;
+    font-size: 100%;
+    margin: 2px;
+    
+  }
+
+ 
+  .cord_box {
+      padding: 2px;
+      border-radius: 2px;
+      margin-right: 10px;
+      margin-left: 10px;
+      background-color: rgba(68, 29, 240, 0.5) !important;
+      font-size: 50%;
+      font-family: Inconsolata;
+  }
+  .cord_box div{
+    background-color: rgba(68, 29, 240, 0.5) !important; 
+    flex-wrap: nowrap;
+  }
+
+  .cord_box div:nth-child(2){
+      font-size: 75%;
+      text-align: center;   
+  }
+
+  
+.info_wrapper{
+    display: grid;
+    grid-template-columns:  [left] minmax(60px, 60px) [right] 1fr;
+    grid-template-rows: [top] 20px repeat(4, [row] auto  );
+    grid-gap: 5px;
+    padding: 5px;
+    background-color: #fff;
+    color: #444;
+    align-items: start;
+    align-content: start;
+    font-size: 100%;
+}
+
+.info_title{
+    grid-column: left / 3;
+    justify-self: center;
+    font-size: 100%;
+    border-bottom-color: var(--border-color);
+    border-bottom: 1px;
+    border-bottom-style: solid;
+}
+
+.info_wrapper > .left{
+    font-weight: bold;
+    text-align: right;
+    font-size: 80%;
+    align-self: end;
+}
+
+.info_wrapper > .right{
+    overflow: hidden;
+    font-size: 80%;
+    align-self: end;
+    background-color: #CCC
+}
+
+.button{
+  width: 32px;  
+  height: 32px;    
+  background-color: transparent;
+  background-repeat:no-repeat;
+  background-size:contain;
+  background-position: center;
+}
+
+.up{
+  background-image:url('img/Sprites/shadedDark/shadedDark10.png');
+}
+.down{
+  background-image:url('img/Sprites/shadedDark/shadedDark03.png');
+}
+
+
+.select_team{
+  display:flex;
+  direction: column;
+}
+
+.red-team{
+  background-color: red;
+}
+.blue-team{
+  background-color: blue;
+}
+.black-team{
+  background-color: black;
+}
+
+.screen-title{
+  font-size: 150%;
+  margin:20px;
+}

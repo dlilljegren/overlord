@@ -321,14 +321,17 @@ public class SessionActor extends AbstractActor {
 
     private void process(ClientCommand.RemoveUnit removeUnit) {
         assert playerState.hasPlayer();
-        playerState.tell(removeUnit);
+        assert viewState != null;
+
+        var playerCmd = viewState.transform(removeUnit);
+        playerState.tell(playerCmd);
     }
 
     private void process(ClientCommand.AddUnit addUnit) {
         assert playerState.hasPlayer();
         assert viewState != null;
-        var playerCmd = viewState.transform(addUnit);
 
+        var playerCmd = viewState.transform(addUnit);
         playerState.tell(playerCmd);
     }
 
@@ -448,6 +451,11 @@ public class SessionActor extends AbstractActor {
             return new PlayerCommand.AddUnit(section, sectionCord);
         }
 
+        PlayerCommand transform(ClientCommand.RemoveUnit removeUnit) {
+            int section = view.masterSection(removeUnit.cord);
+            var sectionCord = view.viewToSection(section).apply(removeUnit.cord);
+            return new PlayerCommand.RemoveUnit(section, sectionCord);
+        }
 
     }
 

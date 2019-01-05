@@ -1,14 +1,7 @@
 package games;
 
-import world.CellControl;
-import world.Team;
-
 public interface Rules {
 
-
-    default boolean teamCanAdd(CellControl cc, Team team) {
-        return cc.teamPercentage(team) > 0.25;
-    }
 
     /**
      * Zone of Control point are given to all cells were distance is less than this

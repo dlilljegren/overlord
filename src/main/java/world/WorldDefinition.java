@@ -1,12 +1,24 @@
 package world;
 
+
 import com.google.common.collect.Maps;
 import games.Rules;
+import org.eclipse.collections.api.block.function.Function;
+import org.eclipse.collections.api.block.predicate.Predicate;
+import org.eclipse.collections.api.map.primitive.IntObjectMap;
+import org.eclipse.collections.api.set.ImmutableSet;
+import org.eclipse.collections.impl.factory.primitive.IntObjectMaps;
+import util.GSColl;
 
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.*;
+import java.util.function.BiFunction;
+import java.util.function.ToIntFunction;
+
+import static java.lang.String.format;
+import static org.eclipse.collections.impl.block.factory.Predicates.*;
+
 
 public class WorldDefinition {
 
@@ -97,6 +109,10 @@ public class WorldDefinition {
     }
 
 
+    public Function<WorldCord, Cord> toSection(int section) {
+        return wc -> fromWorldToSection(wc, section);
+    }
+
     public Cord fromWorldToSection(WorldCord world, int section) {
         return Cord.at(fromWorldToSectionX(world.col, section), fromWorldToSectionY(world.row, section));
     }
@@ -165,6 +181,7 @@ public class WorldDefinition {
     }
 
 
+
     /**
      * Creates the geometry for the rectangle where this sectionNo is master
      *
@@ -180,12 +197,12 @@ public class WorldDefinition {
             return this.sectionDefinition.inSection;
         }
         if (fn) {
-            return bounds.insideWestStrip.negate().and(sectionDefinition::inSection);//If north we are master as long as not in west strip
+            return and(not(bounds.insideWestStrip), sectionDefinition::inSection);//If north we are master as long as not in west strip
         }
         if (fw) {
-            return bounds.insideNorthStrip.negate().and(sectionDefinition::inSection);//If north we are master as long as not in north strip
+            return and(not(bounds.insideNorthStrip), sectionDefinition::inSection);//If north we are master as long as not in north strip
         }
-        return bounds.outsideWestAndNorth.and(sectionDefinition::inSection);
+        return and(bounds.outsideWestAndNorth, sectionDefinition::inSection);
     }
 
 
@@ -193,7 +210,7 @@ public class WorldDefinition {
         private final Predicate<Cord> insideNorthStrip = sectionCord -> section.midToUpperLeftCorner.apply(sectionCord).row < rowSectionOverlap;
         private final Predicate<Cord> insideWestStrip = sectionCord -> section.midToUpperLeftCorner.apply(sectionCord).col < colSectionOverlap;
 
-        private final Predicate<Cord> outsideWestAndNorth = insideNorthStrip.or(insideWestStrip).negate();
+        private final Predicate<Cord> outsideWestAndNorth = or(insideNorthStrip, insideWestStrip).not();
 
         private final Predicate<WorldCord> columnIsInsideWorld = wc -> wc.col < worldWidth && wc.col >= 0;
         private final Predicate<WorldCord> rowIsInsideWorld = wc -> wc.row < worldHeight && wc.row >= 0;
@@ -206,12 +223,18 @@ public class WorldDefinition {
         private final int hsh;
 
         private final ConcurrentMap<Integer, MasterRectangle> masterRectangleCache;
+
+        private final IntObjectMap<ImmutableSet<Cord>> radiusToCentralCircle;
+
         public final Predicate<Integer> isValidSectionNo = sectionNo -> sectionNo >= 0 && sectionNo < world.totalSections;
 
         /**
          * Transform a cord into an array index for faster lookups compared to Map
          */
-        public final ToIntFunction<Cord> cordHash;
+        public final ToIntFunction<Cord> toIndex;
+
+        public final java.util.function.IntFunction<Cord> toCord;
+
 
         private SectionTranslations(int sectionWidth, int sectionHeight) {
             this.hsw = sectionWidth / 2;
@@ -227,7 +250,10 @@ public class WorldDefinition {
 
             this.masterRectangleCache = Maps.newConcurrentMap();
 
-            this.cordHash = c -> c.col + c.row * sectionWidth;
+            this.toIndex = c -> c.col + c.row * sectionWidth;
+            this.toCord = index -> Cord.at(index % sectionWidth, index / sectionWidth);
+
+            this.radiusToCentralCircle = IntObjectMaps.mutable.empty();
         }
 
         public WorldCord worldOrigo(int sectionNo) {
@@ -238,18 +264,27 @@ public class WorldDefinition {
             return worldOrigo(sectionNo).add(hsw, hsh);
         }
 
+
+        public ImmutableSet<Cord> circle(int radius) {
+
+            return this.radiusToCentralCircle.getIfAbsent(radius, () -> sectionDefinition.cordsInCircle(Cord.at(0, 0), radius).collect(GSColl.immutableSet()));
+
+        }
+
         /**
          * @param sectionNo
-         * @return function that for a given mainSection no converts to world coordinates
+         * @return function that for a given mainSection converts to world coordinates
          */
         public Function<Cord, WorldCord> toWorld(int sectionNo) {
             WorldCord origo = world.sectionOrigo.apply(sectionNo);
             Function<Cord, WorldCord> add = c -> {
                 var wc = origo.add(c.col, c.row);
-                assert isValid(wc);
+                assert isValid(wc) : format("WorldCord:[%s] is not valid, was converting cord:[%s] in section:[%d]", wc, c, sectionNo);
                 return wc;
             };
-            return midToUpperLeftCorner.andThen(add);
+            java.util.function.Function<Cord, WorldCord> res = midToUpperLeftCorner.andThen(add);
+
+            return c -> res.apply(c);
         }
 
         /**
@@ -317,7 +352,7 @@ public class WorldDefinition {
     }
 
     public class WorldTranslations {
-        private final IntFunction<WorldCord> sectionOrigo;
+        private final java.util.function.IntFunction<WorldCord> sectionOrigo;
         private final BiFunction<Cord, Integer, WorldCord> fromSectionToWorld;
         public final Integer totalSections = gridWidth * gridHeight;
 
@@ -344,7 +379,12 @@ public class WorldDefinition {
                 return section.upperLeftCornerToMid.apply(inSectionUpperLeftSystem);
 
             };
+        }
 
+        public Predicate<WorldCord> isSectionMaster(int sectionNo) {
+            var first = this.toSection(sectionNo);
+            var p = section.isSectionMaster(sectionNo);
+            return wc -> p.accept(first.apply(wc));
         }
 
         /**

@@ -2,12 +2,16 @@ package messages;
 
 import com.dslplatform.json.CompiledJson;
 import com.google.common.base.MoreObjects;
-import world.*;
+import world.Cord;
+import world.SectorCombatResult;
+import world.Team;
+import world.Unit;
 
 import javax.annotation.Nonnull;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static java.lang.String.format;
 
 public abstract class SectionBroadcastMessage {
 
@@ -55,47 +59,31 @@ public abstract class SectionBroadcastMessage {
     @CompiledJson(onUnknown = CompiledJson.Behavior.IGNORE)
     public static class ZoneOfControl extends SectionBroadcastMessage {
 
-        public final List<CellControl> controlledCells;
-        public final CalculationInfo calculationInfo;
+        public final Map<Team, Set<Cord>> gained;
+        public final Map<Team, Set<Cord>> lost;
 
-        public ZoneOfControl(int sectionNo, List<CellControl> controlledCells, CalculationInfo calculationInfo) {
+        public ZoneOfControl(int sectionNo, Map<Team, Set<Cord>> gained, Map<Team, Set<Cord>> lost) {
             super(sectionNo);
-            this.controlledCells = controlledCells;
-            this.calculationInfo = calculationInfo;
+
+            this.gained = gained;
+            this.lost = lost;
         }
 
+
         public boolean isEmpty() {
-            return this.controlledCells.isEmpty();
+            return this.gained.isEmpty() && this.lost.isEmpty();
         }
 
         @Override
         public String toString() {
             return MoreObjects.toStringHelper(this)
                     .add("sectionNo", sectionNo)
-                    .add("controlledCells", controlledCells.size())
-                    .add("calculationInfo", calculationInfo)
+                    .add("gained", format("Teams:%d Cords:%d", gained.size(), gained.values().stream().flatMap(s -> s.stream()).count()))
+                    .add("lost", format("Teams:%d Cords:%d", lost.size(), lost.values().stream().flatMap(s -> s.stream()).count()))
                     .toString();
         }
     }
 
-    public static class ZoneOfControlSnapshot extends SectionBroadcastMessage {
-        public final Map<Team, Cord> teamToCord;
-
-        public ZoneOfControlSnapshot(int sectorNo, Map<Team, Cord> teamToCord) {
-            super(sectorNo);
-            this.teamToCord = teamToCord;
-        }
-    }
-
-    @CompiledJson(onUnknown = CompiledJson.Behavior.IGNORE)
-    public static class ZoneOfControlDelta extends ZoneOfControlSnapshot {
-        public final Set<Cord> removed;
-
-        public ZoneOfControlDelta(int sectorNo, Map<Team, Cord> teamToCord, Set<Cord> removed) {
-            super(sectorNo, teamToCord);
-            this.removed = removed;
-        }
-    }
 
 
     public static class CombatInfo extends SectionBroadcastMessage {

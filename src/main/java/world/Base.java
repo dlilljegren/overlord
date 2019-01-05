@@ -2,16 +2,18 @@ package world;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.Sets;
+import org.eclipse.collections.api.block.predicate.Predicate;
 
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toCollection;
+import static org.eclipse.collections.impl.block.factory.Predicates.and;
+import static org.eclipse.collections.impl.block.factory.Predicates.not;
 
 
 public class Base<C extends ICord> {
@@ -43,7 +45,7 @@ public class Base<C extends ICord> {
     public static Base<Cord> createInSection(Cord center, int radius, WorldDefinition worldDefinition) {
         var sectionDefinition = worldDefinition.sectionDefinition;
         var crossGeometry = baseGeometry(sectionDefinition, center);
-        var zocGeometry = sectionDefinition.circleArea(center, radius).and(crossGeometry.negate());
+        var zocGeometry = and(sectionDefinition.circleArea(center, radius), not(crossGeometry));
 
         var zoc = worldDefinition.sectionDefinition.fillArea(zocGeometry).collect(toCollection(() -> Sets.newIdentityHashSet()));
         var area = sectionDefinition.fillArea(crossGeometry).collect(toCollection(() -> Sets.newIdentityHashSet()));

@@ -4,9 +4,10 @@ import akka.event.LoggingAdapter;
 import akka.pattern.PatternsCS;
 import games.GameDefinition;
 import messages.*;
-import world.AddUnitException;
 import world.Player;
 import world.UnitBank;
+import world.exceptions.AddUnitException;
+import world.exceptions.RemoveUnitException;
 
 public class PlayerActor extends AbstractActor {
     private final LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
@@ -98,7 +99,7 @@ public class PlayerActor extends AbstractActor {
     private Receive createPlaying() {
         return receiveBuilder()
                 .match(PlayerCommand.AddUnit.class, this::process)
-                .match(ClientCommand.RemoveUnit.class, this::process)
+                .match(PlayerCommand.RemoveUnit.class, this::process)
                 .match(PlayerMessage.SectionAllocatedUnits.class, this::process)
                 .match(GameMessage.AssignSession.class, this::process)
                 .match(SectionMessage.TryRemoveUnit.Ack.class, this::process)
@@ -137,7 +138,7 @@ public class PlayerActor extends AbstractActor {
                             if (t.getCause() instanceof AddUnitException) {
                                 sender.tell(new PlayerCommand.AddUnit.Failed(t.getCause().getMessage(), message.section, message.cord), self());
                             } else {
-                                log.error(t, "Player failed to add unit [{}] error:[{}] reply:[{}]", sectionMessage, t.getMessage());
+                                log.error(t, "Player failed to add unit [{}] error:[{}]", sectionMessage, t.getMessage());
                                 sender.tell(new Status.Failure(t), self());//ToDo need to send specific failure messages
                             }
 
@@ -158,13 +159,31 @@ public class PlayerActor extends AbstractActor {
     /**
      * Client want to take back a previously placed unit
      *
-     * @param removeUnit unit to remove
+     * @param message unit to remove
      */
-    private void process(ClientCommand.RemoveUnit removeUnit) {
+    private void process(PlayerCommand.RemoveUnit message) {
         assert sectionState.hasSection();
         try {
-            SectionMessage.TryRemoveUnit message = new SectionMessage.TryRemoveUnit(player.team, removeUnit.cord);
-            sectionState.tell(message);
+            log.info("RemoveUnit: [{}]", message);
+            SectionMessage.TryRemoveUnit sectionMessage = new SectionMessage.TryRemoveUnit(player.team, message.cord);
+            var sectionActor = this.actorLookup.findSection(message.section);
+            var sender = sender();
+
+            PatternsCS.ask(sectionActor, sectionMessage, gameDefinition.standardTimeout())
+                    .thenAcceptAsync(v -> {
+                        unitBank.addUnits(+1);
+                        sessionState.tell(new PlayerMessage.UnitStatus(unitBank.balance()));
+                    }, getContext().dispatcher())
+                    .exceptionally(t -> {
+                        if (t.getCause() instanceof RemoveUnitException) {
+                            sender.tell(new PlayerCommand.RemoveUnit.Failed(t.getCause().getMessage(), message.section, message.cord), self());
+                        } else {
+                            log.error(t, "Player failed to remove unit [{}] error:[{}]", sectionMessage, t.getMessage());
+                            sender.tell(new Status.Failure(t), self());//ToDo need to send specific failure messages
+                        }
+
+                        return null;
+                    });
 
         } catch (RuntimeException re) {
             sender().tell(new Status.Failure(re), self());

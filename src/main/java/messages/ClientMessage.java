@@ -105,22 +105,24 @@ public abstract class ClientMessage {
         @Nonnull
         public final int sectionNo;
         @Nonnull
-        public final Map<Team, Set<WorldCord>> teamToCords;
-        @Nonnull
-        public final long calculationElapsed;
+        public final Map<Team, Set<WorldCord>> gained;
 
-        public ZoneOfControl(int sectionNo, Map<Team, Set<WorldCord>> teamToCords, long calculationElapsed) {
+        @Nonnull
+        public final Map<Team, Set<WorldCord>> lost;
+
+
+        public ZoneOfControl(int sectionNo, Map<Team, Set<WorldCord>> gained, Map<Team, Set<WorldCord>> lost) {
             this.sectionNo = sectionNo;
-            this.teamToCords = teamToCords;
-            this.calculationElapsed = calculationElapsed;
+            this.gained = gained;
+            this.lost = lost;
         }
 
         @Override
         public String toString() {
             return MoreObjects.toStringHelper(this)
                     .add("sectionNo", sectionNo)
-                    .add("teamToCords", Maps.transformEntries(teamToCords, (t, cSet) -> cSet.size()))
-                    .add("calculationElapsed", calculationElapsed)
+                    .add("gained", Maps.transformEntries(gained, (t, cSet) -> cSet.size()))
+                    .add("lost", Maps.transformEntries(lost, (t, cSet) -> cSet.size()))
                     .toString();
         }
     }

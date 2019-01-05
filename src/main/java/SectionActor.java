@@ -11,10 +11,9 @@ import com.google.common.collect.Sets;
 import games.GameDefinition;
 import messages.*;
 import world.*;
+import world.exceptions.AddUnitException;
 
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class SectionActor extends AbstractActorWithTimers {
     private final LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
@@ -112,15 +111,20 @@ public class SectionActor extends AbstractActorWithTimers {
     }
 
 
-    @SuppressWarnings("unused")
+
     private void process(SectionMessage.CalculateZoneOfControl calculateZoneOfControl) {
+        /*
         CalculationInfo calcInfo = CalculationInfo.start();
         Stream<CellControl> zoneOfControlResult = section.calculateZoneOfControl();
         calcInfo.stop();
+        */
 
         //log.debug("Broadcasting ZoneOfControl message");
         //Inform all sessions
-        this.broadcastZoneOfControl(new SectionBroadcastMessage.ZoneOfControl(this.sectorNo, zoneOfControlResult.collect(Collectors.toList()), calcInfo));
+
+        var zocSnap = this.section.calculateZoneOfControl();
+
+        this.broadcastZoneOfControl(zocSnap);
 
     }
 
@@ -230,7 +234,7 @@ public class SectionActor extends AbstractActorWithTimers {
         if (section.isOccupied(addUnit.cord)) {
             log.warning("Cord [{}] already occupied???");
         }
-        section.setUnitAtCord(addUnit.unit, addUnit.cord);
+        section.slaveAddUnitAtCord(addUnit.unit, addUnit.cord);
         broadcastUnitAdded(addUnit.unit, addUnit.cord);
     }
 
@@ -240,7 +244,7 @@ public class SectionActor extends AbstractActorWithTimers {
             log.warning("Cord is empty ???");
             return;
         }
-        section.removeUnitAtCord(message.unit, message.cord);
+        section.slaveRemoveUnitAtCord(message.unit, message.cord);
     }
 
 
@@ -306,17 +310,21 @@ public class SectionActor extends AbstractActorWithTimers {
     }
 
     private void broadcastUnitRemoved(Unit unit, Cord cord) {
-        log.debug("Broadcasting unit [{}] removed from cord:[{}]", unit, cord);
+        log.debug("Broadcasting unit [{}] lost from cord:[{}]", unit, cord);
         broadcast(new SectionBroadcastMessage.UnitRemoved(sectorNo, unit, cord));
     }
 
 
     private boolean lastZoneOfControlEmpty = false;
 
-    private void broadcastZoneOfControl(SectionBroadcastMessage.ZoneOfControl message) {
-        if (message.isEmpty() && lastZoneOfControlEmpty) return;
-        broadcast(message);
-        lastZoneOfControlEmpty = message.isEmpty();
+    private void broadcastZoneOfControl(ZocResult result) {
+
+        if (result.isEmpty()) {
+            if (!result.isSnapshot()) return;
+            if (lastZoneOfControlEmpty) return;
+        }
+        broadcast(new SectionBroadcastMessage.ZoneOfControl(this.sectorNo, result.gained, result.lost));
+        lastZoneOfControlEmpty = result.isEmpty();
     }
 
     private void broadcast(SectionBroadcastMessage message) {

@@ -1,9 +1,10 @@
 package world;
 
+import org.eclipse.collections.api.block.predicate.Predicate;
+
 import java.util.Arrays;
 import java.util.Random;
 import java.util.function.IntFunction;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;

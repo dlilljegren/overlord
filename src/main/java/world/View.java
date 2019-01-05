@@ -2,11 +2,16 @@ package world;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import org.eclipse.collections.api.block.function.Function;
+import org.eclipse.collections.api.block.predicate.Predicate;
+import org.eclipse.collections.api.map.primitive.MutableIntObjectMap;
+import org.eclipse.collections.impl.block.factory.Functions;
+import org.eclipse.collections.impl.block.factory.Predicates;
+import org.eclipse.collections.impl.factory.primitive.IntObjectMaps;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.function.Predicate;
+
 
 public class View {
     private final WorldDefinition worldDefinition;
@@ -21,8 +26,9 @@ public class View {
 
     private final Predicate<WorldCord> inView;
 
-    private final Map<Integer, Function<Cord, WorldCord>> sectionToViewFuncCache;
-    private Map<Integer, Predicate<Cord>> isSectionCordInViewPredicateCache;
+    private final MutableIntObjectMap<Function<Cord, WorldCord>> sectionToViewFuncCache;
+    private final MutableIntObjectMap<Function<WorldCord, Cord>> viewToSectionFuncCache;
+    private final MutableIntObjectMap<Predicate<Cord>> isSectionCordInViewPredicateCache;
     private Map<Integer, MasterRectangle> masterRectCache;
 
 
@@ -41,10 +47,12 @@ public class View {
 
         this.inView = viewCord -> viewCord.col >= minCol && viewCord.col < maxCol && viewCord.row >= minRow && viewCord.row < maxRow;
 
-        this.sectionToViewFuncCache = Maps.newHashMap();
+        this.sectionToViewFuncCache = IntObjectMaps.mutable.empty();
         this.masterRectCache = Maps.newHashMap();
+        this.viewToSectionFuncCache = IntObjectMaps.mutable.empty();
 
-        isSectionCordInViewPredicateCache = Maps.newHashMap();
+        isSectionCordInViewPredicateCache = IntObjectMaps.mutable.empty();
+
     }
 
 
@@ -54,7 +62,7 @@ public class View {
     }
 
     /**
-     * @return all mainSection id's inside this view
+     * @return the id of all sections which main area is within the view
      */
     public Set<Integer> masterSectionsInView() {
         //We determine the min grid column and the max grid column loop over them and get master
@@ -69,9 +77,11 @@ public class View {
         Set<Integer> result = Sets.newTreeSet();
         for (var c = minCol; c <= maxCol; c++) {
             for (var r = minRow; r <= maxRow; r++) {
-                var next = worldDefinition.masterSectionAt(c, r);
-                assert !result.contains(next);
-                result.add(next);
+                Integer next = worldDefinition.masterSectionAt(c, r);
+                if (worldDefinition.section.isValidSectionNo.test(next)) {
+                    assert !result.contains(next);
+                    result.add(next);
+                }
             }
         }
 
@@ -80,19 +90,13 @@ public class View {
         return result;
     }
 
-    public Function<Cord, WorldCord> sectionToView(Integer sectionNo) {
-        var f = sectionToViewFuncCache.get(sectionNo);
-        if (f == null) {
-            f = worldDefinition.section.toWorld(sectionNo).andThen(worldToView);//Function from mainSection to world, the word to view
-            sectionToViewFuncCache.put(sectionNo, f);
-        }
-        return f;
+    public Function<Cord, WorldCord> sectionToView(int sectionNo) {
+        return sectionToViewFuncCache.getIfAbsentPutWithKey(sectionNo, sn -> Functions.chain(worldDefinition.section.toWorld(sn), worldToView));
     }
 
 
-    public Function<WorldCord, Cord> viewToSection(Integer sectionNo) {
-        var worldToSection = worldDefinition.world.toSection(sectionNo);//Function from world to mainSection
-        return worldToSection.compose(viewToWorld);//Then mainSection to the view
+    public Function<WorldCord, Cord> viewToSection(int sectionNo) {
+        return viewToSectionFuncCache.getIfAbsentPutWithKey(sectionNo, sn -> Functions.chain(viewToWorld, worldDefinition.world.toSection(sn)));
     }
 
     public WorldCord viewToWorld(WorldCord viewCord) {
@@ -120,15 +124,8 @@ public class View {
         return inView;
     }
 
-    public Predicate<Cord> isSectionCordInView(Integer section) {
-        var f = isSectionCordInViewPredicateCache.get(section);
-        if (f == null) {
-            var sectionToView = sectionToView(section);
-            f = sc -> inView.test(sectionToView.apply(sc));
-            isSectionCordInViewPredicateCache.put(section, f);
-        }
-        return f;
-
+    public Predicate<Cord> isSectionCordInView(int sectionNo) {
+        return isSectionCordInViewPredicateCache.getIfAbsentPutWithKey(sectionNo, sn -> Predicates.attributePredicate(sectionToView(sectionNo), inView));
     }
 
     public Predicate<Cord> isSectionMaster(Integer sectionNo) {

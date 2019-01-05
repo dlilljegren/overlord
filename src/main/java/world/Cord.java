@@ -15,7 +15,10 @@ public final class Cord implements Comparable<Cord>, ICord {
     public final int col;
     public final int row;
 
+
     private static final Map<Integer, Map<Integer, Cord>> cache = Maps.newConcurrentMap();
+
+    public static final Cord ZERO = Cord.at(0, 0);
 
     static final Cord[] directions = new Cord[]{
             Cord.at(1, 0),

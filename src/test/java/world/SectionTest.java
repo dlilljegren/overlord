@@ -22,15 +22,15 @@ class SectionTest {
 
         Section underTest = new Section(0, worldDefinition, ITerrainMap.EMPTY, baseGenerator);
 
-        //underTest.setUnitAtCord(Red,Cord.at(0,0));
-        underTest.setUnitAtCord(Red, Cord.at(0, 1));
-        underTest.setUnitAtCord(Red, Cord.at(0, 2));
-        underTest.setUnitAtCord(Red, Cord.at(0, 3));
+        //underTest.addUnitAtCord(Red,Cord.at(0,0));
+        underTest.addUnitAtCord(Red, Cord.at(0, 1));
+        underTest.addUnitAtCord(Red, Cord.at(0, 2));
+        underTest.addUnitAtCord(Red, Cord.at(0, 3));
 
-        underTest.setUnitAtCord(Blue, Cord.at(1, 0));
-        underTest.setUnitAtCord(Blue, Cord.at(1, 1));
-        underTest.setUnitAtCord(Blue, Cord.at(1, 2));
-        underTest.setUnitAtCord(Blue, Cord.at(1, 3));
+        underTest.addUnitAtCord(Blue, Cord.at(1, 0));
+        underTest.addUnitAtCord(Blue, Cord.at(1, 1));
+        underTest.addUnitAtCord(Blue, Cord.at(1, 2));
+        underTest.addUnitAtCord(Blue, Cord.at(1, 3));
 
 
         underTest.combat().delta.unitDeletes.forEach(System.out::println);

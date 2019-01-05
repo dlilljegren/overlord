@@ -29,14 +29,40 @@ public abstract class PlayerCommand {
     }
 
     public static class AddUnit extends CordAware {
-
         public AddUnit(int section, Cord cord) {
+            super(section, cord);
+        }
+
+
+        @Override
+        public String toString() {
+            return MoreObjects.toStringHelper(this)
+                    .add("cord", cord)
+                    .add("section", section)
+                    .toString();
+        }
+
+        public static class Failed extends CordAware {
+            @Nonnull
+            public final String reason;
+
+            public Failed(String reason, int section, Cord cord) {
+                super(section, cord);
+                this.reason = reason;
+            }
+        }
+    }
+
+    public static class RemoveUnit extends CordAware {
+        public RemoveUnit(int section, Cord cord) {
             super(section, cord);
         }
 
         @Override
         public String toString() {
             return MoreObjects.toStringHelper(this)
+                    .add("cord", cord)
+                    .add("section", section)
                     .toString();
         }
 

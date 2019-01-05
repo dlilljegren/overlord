@@ -5,6 +5,7 @@ import com.google.common.base.MoreObjects;
 import world.Cord;
 import world.WorldCord;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 /**
@@ -13,9 +14,10 @@ import javax.annotation.Nullable;
 public abstract class ClientCommand {
 
     public static class AddUnit extends ClientCommand {
+        @Nonnull
         public final WorldCord cord;
 
-        public AddUnit(WorldCord cord) {
+        public AddUnit(@Nonnull WorldCord cord) {
             this.cord = cord;
         }
 
@@ -28,9 +30,10 @@ public abstract class ClientCommand {
     }
 
     public static class RemoveUnit extends ClientCommand {
-        public final Cord cord;
+        @Nonnull
+        public final WorldCord cord;
 
-        public RemoveUnit(Cord cord) {
+        public RemoveUnit(@Nonnull WorldCord cord) {
             this.cord = cord;
         }
 

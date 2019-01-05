@@ -12,10 +12,13 @@ import changes.ViewUpdate;
 import changes.ViewUpdateBuilder;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import games.GameDefinition;
 import messages.*;
 import messages.SectionReply.Snapshot;
+import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.impl.block.factory.Functions;
+import org.eclipse.collections.impl.map.mutable.MapAdapter;
+import org.eclipse.collections.impl.set.mutable.SetAdapter;
 import world.*;
 
 import java.time.Instant;
@@ -26,9 +29,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
+import static java.lang.String.format;
 import static java.util.stream.Collectors.toUnmodifiableMap;
+import static org.eclipse.collections.impl.block.factory.Predicates.not;
 
 
 public class ViewActor extends AbstractActor {
@@ -72,6 +76,7 @@ public class ViewActor extends AbstractActor {
                 .match(SectionBroadcastMessage.UnitRemoved.class, this::process)
                 .match(SectionBroadcastMessage.CombatResult.class, this::process)
                 .match(SectionBroadcastMessage.ZoneOfControl.class, this::process)
+                .match(DistributedPubSubMediator.SubscribeAck.class, this::process)
                 .matchAny(o -> log.info("received unsupported message [{}] when in state playing", o))
                 .build();
     }
@@ -206,25 +211,42 @@ public class ViewActor extends AbstractActor {
 
     private void process(SectionBroadcastMessage.ZoneOfControl zoneOfControl) {
         int section = zoneOfControl.sectionNo;
-        Function<Cord, WorldCord> worldCord = view.sectionToView(section);
-        Map<Team, Set<WorldCord>> teamToCord = zoneOfControl.controlledCells.stream()
-                .filter(cc -> cc.bestTeam().isPresent()).
-                        collect(Collectors.groupingBy(
-                                cc -> cc.bestTeam().get(),
-                                Maps::newHashMap,
-                                Collectors.mapping(cc -> worldCord.apply(cc.cord), Collectors.toUnmodifiableSet())
-                        ));
 
-        var msg = new ClientMessage.ZoneOfControl(zoneOfControl.sectionNo, teamToCord, zoneOfControl.calculationInfo.elapsed);
+        org.eclipse.collections.api.block.function.Function<Cord, WorldCord> toWorld = c -> view.sectionToView(section).apply(c);
+
+        var onlyInView = this.view.isSectionCordInView(section);
+
+        MutableMap<Team, Set<WorldCord>> gained = MapAdapter.adapt(zoneOfControl.gained).collectValues((t, s) -> SetAdapter.adapt(s)
+                .select(onlyInView)
+                .collect(toWorld));
+
+        MutableMap<Team, Set<WorldCord>> lost = MapAdapter.adapt(zoneOfControl.lost).collectValues(
+                (t, s) -> SetAdapter.adapt(s)
+                        .select(onlyInView)
+                        .collect(toWorld));
+
+        var msg = new ClientMessage.ZoneOfControl(zoneOfControl.sectionNo, gained, lost);
 
 
         toSession(msg);
 
         //Verify that the section only send out ZoC for the cells it controls
-        assert zoneOfControl.controlledCells.stream().map(CellControl::cord).allMatch(worldDefinition.section.isSectionMaster(section));
+        assert check(gained, section);
+        assert check(lost, section);
+
     }
 
     private void toSession(Object msg) {
         this.getContext().getParent().tell(msg, self());
+    }
+
+    private boolean check(MutableMap<Team, Set<WorldCord>> map, int sectionNo) {
+        var bad = map.valuesView().flatCollect(Functions.identity()).collect(view.viewToSection(sectionNo)).detectOptional(not(worldDefinition.section.isSectionMaster(sectionNo)));
+        assert !bad.isPresent() : format("WorldCord:[%s] is not own by section:[%d], section coordinate:[%s]", bad.map(worldDefinition.section.toWorld(sectionNo)), sectionNo, bad.get());
+        return true;
+    }
+
+    private void process(DistributedPubSubMediator.SubscribeAck subscribeAck) {
+        //ToDo safety count down
     }
 }

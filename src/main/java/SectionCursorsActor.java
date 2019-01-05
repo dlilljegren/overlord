@@ -78,7 +78,7 @@ public class SectionCursorsActor extends AbstractActorWithTimers {
         lastCursors.remove(removeSession.session);
         sessionToId.remove(removeSession.session);
         if (lastCursors.isEmpty()) timers().cancel(CursorBroadcast);
-        log.debug("removed session actor [{}]", removeSession.session.path());
+        log.debug("lost session actor [{}]", removeSession.session.path());
         isDirty = true;
     }
 

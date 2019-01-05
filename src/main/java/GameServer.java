@@ -8,7 +8,9 @@ import akka.http.javadsl.Http;
 import akka.http.javadsl.ServerBinding;
 import akka.http.javadsl.model.*;
 import akka.http.javadsl.model.ws.Message;
+import akka.http.javadsl.server.Directives;
 import akka.http.javadsl.server.Route;
+import akka.http.javadsl.server.directives.ContentTypeResolver;
 import akka.http.javadsl.server.directives.WebSocketDirectives;
 import akka.stream.ActorMaterializer;
 import akka.stream.OverflowStrategy;
@@ -53,7 +55,7 @@ class GameServer extends WebSocketDirectives {
 
 
     private Route routes() {
-
+        var contentTypeResolver = new MyContentTypeResolver();
         return route(
                 path("ws", () -> handleWebSocketMessages(createWebSocketFlow())),
 
@@ -61,10 +63,27 @@ class GameServer extends WebSocketDirectives {
                         get(() ->
                                 complete(StatusCodes.OK, HttpEntities.create(ContentTypes.TEXT_HTML_UTF8, "<html><h1>Say hello to akka-http</h1></html>")))),
 
-                pathPrefix("web", () -> getFromResourceDirectory("web")),
-                pathPrefix("dev", () -> getFromDirectory("D:\\Dev\\overlord\\src\\main\\resources\\web"))
+                pathPrefix("web", () -> getFromResourceDirectory("web", contentTypeResolver)),
+                pathPrefix("dev", () -> getFromDirectory("D:\\Dev\\overlord\\src\\main\\resources\\web", contentTypeResolver))
         );
 
+    }
+
+    private class MyContentTypeResolver implements ContentTypeResolver {
+        private final ContentTypeResolver delegate;
+
+        MyContentTypeResolver() {
+            this.delegate = Directives.defaultContentTypeResolver();
+        }
+
+        @Override
+        public ContentType resolve(String s) {
+            if (s.endsWith(".mjs")) {
+                return this.delegate.resolve(".js");
+            } else {
+                return this.delegate.resolve(s);
+            }
+        }
     }
 
 

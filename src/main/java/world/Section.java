@@ -7,8 +7,13 @@ import com.google.common.collect.Sets;
 import map.IBaseGenerator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.eclipse.collections.api.map.MutableMap;
+import world.exceptions.AddUnitException;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.Predicate;
@@ -30,7 +35,7 @@ public class Section {
 
     public final SectorNeighbours neighbours;
 
-    private final Map<Cord, Unit> units = Maps.newHashMap();
+    private final MutableMap<Cord, Unit> units = org.eclipse.collections.impl.factory.Maps.mutable.empty();
     private final Map<Cord, Terrain> terrains;
 
     final Map<Cord, Base<Cord>> bases;
@@ -51,6 +56,8 @@ public class Section {
 
     private static final Logger L = LogManager.getLogger(Section.class);
 
+
+    private final IZoneOfControlCalculator zoneOfControlCalculator;
 
     public Section(int sectionNo, WorldDefinition worldDefinition, ITerrainMap<Cord> map, IBaseGenerator baseGenerator) {
         assert sectionNo >= 0;
@@ -100,12 +107,16 @@ public class Section {
 
         this.bases.values().stream().findFirst().ifPresent(b -> populateBase(b, Teams.teamForName("red")));
 
+        this.zoneOfControlCalculator = new ZoneOfControlCalculator2(sectionNo, worldDefinition);
+
         //Keep at end
         var initialSnapshot = new SectionUpdateBuilder();
         units.forEach(initialSnapshot::add);
         terrains.forEach(initialSnapshot::add);
         bases.forEach(initialSnapshot::add);
         this.lastSnapshot = initialSnapshot.buildSnapshot(version);
+
+
     }
 
 
@@ -118,7 +129,7 @@ public class Section {
         isOccupiedOrThrow(cord);
         isSectionMasterOrThrow(cord);
         isControlledOrThrow(cord, unit);
-        setUnitAtCord(unit, cord);
+        addUnitAtCord(unit, cord);
     }
 
     public Unit tryRemoveUnitAtCord(Team team, Cord cord) {
@@ -169,30 +180,9 @@ public class Section {
      * @param unit
      */
     private void isControlledOrThrow(Cord cord, Unit unit) {
-        //Ask for a geometry around the cord
-        //Use the geometry to filter out all units that may affect the cord
-        //Based on the units calculate the zone of control they have on the given cord
-
-        var geometry = sectionDefinition.circleArea(cord, worldDefinition.rules.zocRadius());
-        var maxDistance = worldDefinition.rules.zocRadius();
-        var zoneOfControl = new ZoneOfControlAtCordCalculator(cord, sectionDefinition, units, Optional.of(geometry), maxDistance);
-        var cellControl = zoneOfControl.cordControl();
-
-        Runnable noZoc = () -> {
+        if (!this.zoneOfControlCalculator.hasControl(unit.team, cord)) {
             throw new AddUnitException.NotInZocException(this.sectionNo, cord, unit.team);
-        };
-
-        cellControl.ifPresentOrElse(
-                cc -> {
-                    if (!worldDefinition.rules.teamCanAdd(cc, unit.team)) {
-                        if (cc.bestTeam().isPresent())
-                            throw new AddUnitException.NotInZocException(sectionNo, cord, unit.team, cc.bestTeam().get());
-                        else
-                            noZoc.run();
-                    }
-                }, noZoc
-        );
-
+        }
     }
 
     private void isSectionMasterOrThrow(Cord cord) {
@@ -201,11 +191,7 @@ public class Section {
         }
     }
 
-    public void setUnitAtCord(Unit unit, Cord cord) {
-        inSectionOrThrow(cord);
-        units.put(cord, unit);
-        version = version.next();
-    }
+
 
     private SectionNeighbour neighbour(int sectionNo) {
         return sectionNeighbours.computeIfAbsent(sectionNo, SectionNeighbour::new);
@@ -316,14 +302,25 @@ public class Section {
         return this.lastSnapshot;
     }
 
-    public Stream<CellControl> calculateZoneOfControl() {
-        ZoneOfControlCalculator zoneOfControlCalculator = new ZoneOfControlCalculator(this.worldDefinition.sectionDefinition, this.units, Optional.empty());
-
-
-        return zoneOfControlCalculator.result();
+    public ZocResult calculateZoneOfControl() {
+        var result = this.zoneOfControlCalculator.calculateSnapshot(this.units);
+        return result;
     }
 
-    public Unit removeUnitAtCord(Unit unit, Cord cord) {
+
+    /**
+     * Called by the slaves, might need to fix this for the zone of control, if slaves will actually be able to add
+     *
+     * @param unit
+     * @param cord
+     */
+    void addUnitAtCord(Unit unit, Cord cord) {
+        inSectionOrThrow(cord);
+        units.put(cord, unit);
+        version = version.next();
+    }
+
+    Unit removeUnitAtCord(Unit unit, Cord cord) {
         var removed = units.remove(cord);
         assert removed.equals(unit);
         return removed;
@@ -344,6 +341,14 @@ public class Section {
         L.info("Added [{}] units around base", newUnits.size());
         units.putAll(newUnits);
         return newUnits;
+    }
+
+    public void slaveAddUnitAtCord(Unit unit, Cord cord) {
+        this.addUnitAtCord(unit, cord);
+    }
+
+    public void slaveRemoveUnitAtCord(Unit unit, Cord cord) {
+        this.removeUnitAtCord(unit, cord);
     }
 
 

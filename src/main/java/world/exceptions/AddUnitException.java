@@ -1,15 +1,15 @@
-package world;
+package world.exceptions;
+
+import world.*;
 
 import static java.lang.String.format;
 
-public abstract class AddUnitException extends RuntimeException {
+public abstract class AddUnitException extends SectionException {
 
-    public final int sectionNo;
     public final Cord cord;
 
     protected AddUnitException(int sectionNo, Cord cord, String message) {
-        super(message);
-        this.sectionNo = sectionNo;
+        super(sectionNo, message);
         this.cord = cord;
     }
 
@@ -44,7 +44,7 @@ public abstract class AddUnitException extends RuntimeException {
     public static class OccupiedByUnitException extends AddUnitException {
 
 
-        protected OccupiedByUnitException(int sectionNo, Cord cord, Unit unit) {
+        public OccupiedByUnitException(int sectionNo, Cord cord, Unit unit) {
             super(sectionNo, cord, format("Cord %s in section:%s is already occupied by unit [%s]", cord, sectionNo, unit));
         }
 
