@@ -6,6 +6,7 @@ import extensions.java.util.Map.MapExtension;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toUnmodifiableMap;
@@ -25,9 +26,13 @@ public class BaseUnitAllocation {
     }
 
     Map<Player, Integer> allocatePerPlayer(Stream<Player> players) {
-        var teams = units.entrySet().stream().collect(toUnmodifiableMap(e -> e.getKey(), e -> e.getValue().team));
+        Map<Cord, Team> teams = units.entrySet().stream().collect(toUnmodifiableMap(e -> e.getKey(), e -> e.getValue().team));
 
-        var teamToPoints = bases.stream().map(b -> b.owner(teams)).filter(Optional::isPresent).collect(toUnmodifiableMap(o -> o.get(), o -> unitsAllocatedPerBase));
+        var teamToPoints = bases.stream()
+                .map(b -> b.owner(teams))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .collect(Collectors.groupingBy(e -> e, Collectors.summingInt(t -> unitsAllocatedPerBase)));
 
         return MapExtension.splitPoints(teamToPoints, players);
     }

@@ -38,6 +38,15 @@ public abstract class SectionBroadcastMessage {
             this.unit = unit;
             this.cord = cord;
         }
+
+        @Override
+        public String toString() {
+            return MoreObjects.toStringHelper(this)
+                    .add("sectionNo", sectionNo)
+                    .add("unit", unit)
+                    .add("cord", cord)
+                    .toString();
+        }
     }
 
     @CompiledJson(onUnknown = CompiledJson.Behavior.IGNORE)
@@ -54,6 +63,15 @@ public abstract class SectionBroadcastMessage {
             this.unit = unit;
             this.cord = cord;
         }
+
+        @Override
+        public String toString() {
+            return MoreObjects.toStringHelper(this)
+                    .add("sectionNo", sectionNo)
+                    .add("unit", unit)
+                    .add("cord", cord)
+                    .toString();
+        }
     }
 
     @CompiledJson(onUnknown = CompiledJson.Behavior.IGNORE)
@@ -61,12 +79,14 @@ public abstract class SectionBroadcastMessage {
 
         public final Map<Team, Set<Cord>> gained;
         public final Map<Team, Set<Cord>> lost;
+        public final boolean isSnapshot;
 
-        public ZoneOfControl(int sectionNo, Map<Team, Set<Cord>> gained, Map<Team, Set<Cord>> lost) {
+        public ZoneOfControl(int sectionNo, Map<Team, Set<Cord>> gained, Map<Team, Set<Cord>> lost, boolean isSnapshot) {
             super(sectionNo);
 
             this.gained = gained;
             this.lost = lost;
+            this.isSnapshot = isSnapshot;
         }
 
 

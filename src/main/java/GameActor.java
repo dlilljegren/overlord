@@ -7,8 +7,12 @@ import com.typesafe.config.ConfigFactory;
 import games.GameDefinition;
 import games.GameDefinitions;
 import messages.*;
+import org.eclipse.collections.api.set.primitive.IntSet;
+import org.eclipse.collections.impl.factory.primitive.IntSets;
 import util.Namer;
 import world.SectorNeighbours;
+import world.Team;
+import world.Teams;
 import world.WorldDefinition;
 
 import java.util.*;
@@ -69,6 +73,11 @@ public class GameActor extends AbstractActor implements GameServer.IWebSocketSes
 
         teamsActor = getContext().actorOf(TeamsActor.props(gameDefinition), TeamsActor.ActorName);
 
+        populateBase(IntSets.immutable.of(0, 1, 5), Teams.RED);
+        populateBase(IntSets.immutable.of(15, 20, 21), Teams.BLUE);
+        populateBase(IntSets.immutable.of(3, 4, 9), Teams.BLACK);
+
+
         log.info("Starting WebServer");
         gameServer.start();
 
@@ -76,6 +85,12 @@ public class GameActor extends AbstractActor implements GameServer.IWebSocketSes
         log.info("Server Started");
 
 
+    }
+
+    private void populateBase(IntSet sections, Team team) {
+        var msg = new SectionMessage.PopulateRandomBase(team);
+        sections.collect(i -> sectionNoToActor.get(i))
+                .forEach(sa -> sa.tell(msg, self()));
     }
 
 

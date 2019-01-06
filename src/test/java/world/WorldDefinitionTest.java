@@ -7,6 +7,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 //see https://github.com/Pragmatists/JUnitParams
 
@@ -87,6 +88,36 @@ class WorldDefinitionTest {
 
         //The reverse world to mainSection
         assertEquals(sectionCord, underTest_2x2_3x3_1_1.world.toSection(sectionNo).apply(expected));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "3,  6,  0, 2",
+            "3,  4,  1, 0",
+            "3,  4,  2, 0",
+
+            "3,  7,  1, 2",
+            "3,  7,  2, 2",
+
+    })
+    void fromSectionToSection(int fromSection, int toSection, int col, int row) {
+        var underTest = underTest_3x3_5x5_2_1;//2 == -2
+        var start = Cord.at(col, row);
+
+        System.out.println("In World:" + underTest.section.toWorld(3).apply(start));
+        System.out.println("Back World:" + underTest.world.toSection(3).apply(underTest.section.toWorld(3).apply(start)));
+
+        var fromTo = underTest.section.fromTo(fromSection, toSection);
+        var cordInTo = fromTo.apply(start);
+        assertTrue(underTest.sectionDefinition.inSection(cordInTo), "Bad " + cordInTo);
+
+        //Now reverse
+        var toFrom = underTest.section.fromTo(toSection, fromSection);
+        var cordInFrom = toFrom.apply(cordInTo);
+        assertTrue(underTest.sectionDefinition.inSection(cordInFrom));
+
+        assertEquals(start, cordInFrom);
+
     }
 
 

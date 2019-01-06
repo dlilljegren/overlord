@@ -1,7 +1,9 @@
 package world;
 
 
+import org.eclipse.collections.api.block.function.Function;
 import org.eclipse.collections.api.block.predicate.Predicate;
+import org.eclipse.collections.api.block.predicate.primitive.ObjectLongPredicate;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.map.primitive.ImmutableObjectIntMap;
@@ -12,6 +14,7 @@ import org.eclipse.collections.api.set.SetIterable;
 import org.eclipse.collections.api.tuple.Pair;
 import org.eclipse.collections.api.tuple.primitive.ObjectIntPair;
 import org.eclipse.collections.api.tuple.primitive.ObjectLongPair;
+import org.eclipse.collections.impl.block.factory.Functions;
 import org.eclipse.collections.impl.factory.Maps;
 import org.eclipse.collections.impl.factory.Sets;
 import org.eclipse.collections.impl.factory.primitive.ObjectIntMaps;
@@ -29,7 +32,6 @@ public class ZoneOfControlCalculator2 implements IZoneOfControlCalculator {
 
     private final MutableMap<Cord, CellControl2> zocs;
 
-
     private final int zocRadius;
 
     private final ImmutableObjectIntMap<Cord> cordToPoints;
@@ -38,6 +40,12 @@ public class ZoneOfControlCalculator2 implements IZoneOfControlCalculator {
 
     private final Predicate<Cord> isValid;
     private final Predicate<Cord> isInMaster;
+
+    private final Function<Pair<?, CellControl2>, SetIterable<Team>> deltaLosers;
+    private final Function<Pair<?, CellControl2>, SetIterable<Team>> deltaWinners;
+    private final Function<Pair<?, CellControl2>, SetIterable<Team>> currentWinners;
+
+    private final ObjectLongPredicate<Cord> isMasterCord;
 
     public ZoneOfControlCalculator2(int sectionNo, @Nonnull WorldDefinition worldDefinition) {
         this.sectionDefinition = worldDefinition.sectionDefinition;
@@ -58,6 +66,12 @@ public class ZoneOfControlCalculator2 implements IZoneOfControlCalculator {
         this.dirty = Sets.mutable.empty();
 
         this.isInMaster = worldDefinition.section.isSectionMaster(sectionNo);
+
+        this.deltaLosers = Functions.chain(Functions.secondOfPair(), CellControl2::teamsLoosingZoc);
+        this.deltaWinners = Functions.chain(Functions.secondOfPair(), CellControl2::teamsGainingZoc);
+        this.currentWinners = Functions.chain(Functions.secondOfPair(), CellControl2::currentWinners);
+
+        this.isMasterCord = (c, p) -> isInMaster.test(c);
     }
 
 
@@ -65,10 +79,7 @@ public class ZoneOfControlCalculator2 implements IZoneOfControlCalculator {
         return this.zocs.getIfAbsentPut(cord, CellControl2::new);
     }
 
-    private void clearAll() {
-        this.zocs.values().forEach(CellControl2::clear);
-        this.dirty.clear();
-    }
+
 
     private void markAsDirty(Cord c) {
         this.dirty.add(c);
@@ -76,13 +87,9 @@ public class ZoneOfControlCalculator2 implements IZoneOfControlCalculator {
 
 
     @Override
-    public ZocResult calculateSnapshot(Map<Cord, Unit> units) {
-        clearAll();
-        units.forEach(this::addPoints);
+    public ZocResult getSnapshot() {
         this.zocs.forEach(CellControl2::recalculateSnapshot);
-        this.dirty.clear();
-        return ZocResult.snapshot(winners(zocs));
-
+        return ZocResult.snapshot(currentWinners(zocs));
     }
 
     /**
@@ -90,49 +97,75 @@ public class ZoneOfControlCalculator2 implements IZoneOfControlCalculator {
      * Two things might have happened, a team may have gained control of a cord or it may have lost control
      * In both cases only cords "touched" needs to be considered
      *
-     * @param added   units added since last calculation
-     * @param removed units removed since last calculation
      * @return the cords teams have gained or lost control over
      */
     @Override
-    public ZocResult calculateDelta(Map<Cord, Unit> added, Map<Cord, Unit> removed) {
-        this.dirty.clear();
-        added.forEach(this::addPoints);
-        removed.forEach(this::removePoints);
-        var dirty = zocs.select(this::isDirty);
-        dirty.forEach(CellControl2::recalculateDelta);
-        return ZocResult.delta(winners(dirty), losers(dirty));
+    public ZocResult getDelta() {
+        var dirty = zocs.select(this::isDirty);//Get all that have changed
+        dirty.forEach(CellControl2::recalculateDelta);//Recalculate the current winner
+        var result = ZocResult.delta(deltaWinners(dirty), deltaLosers(dirty)); //Extract the delta
+        dirty.clear(); //Clear all dirty
+        return result;
+    }
+
+    @Override
+    public void addUnit(Unit unit, Cord at) {
+        addPoints(at, unit);
+    }
+
+    @Override
+    public void removeUnit(Unit unit, Cord at) {
+        removePoints(at, unit);
+    }
+
+    @Override
+    public void addUnits(Map<Cord, Unit> units) {
+        units.forEach(this::addPoints);
+    }
+
+    @Override
+    public void removeUnits(Map<Cord, Unit> units) {
+        units.forEach(this::removePoints);
     }
 
     @Override
     public boolean hasControl(Team team, Cord cord) {
         var cc = zocs.get(cord);
         if (cc == null) return false;
+        if (dirty.contains(cord)) {
+            cc.recalculate(true);
+        }
         return cc.hasControl(team);
     }
 
 
-    private Map<Team, Set<Cord>> winners(@Nonnull MapIterable<Cord, CellControl2> zoc) {
+    private Map<Team, Set<Cord>> deltaWinners(@Nonnull MapIterable<Cord, CellControl2> zoc) {
+        return extract(zoc, this.deltaWinners);
+    }
+
+    private Map<Team, Set<Cord>> deltaLosers(@Nonnull MapIterable<Cord, CellControl2> zoc) {
+        return extract(zoc, this.deltaLosers);
+    }
+
+    private Map<Team, Set<Cord>> currentWinners(@Nonnull MapIterable<Cord, CellControl2> zoc) {
+        return extract(zoc, this.currentWinners);
+    }
+
+    private Map<Team, Set<Cord>> extract(@Nonnull MapIterable<Cord, CellControl2> zoc, Function<Pair<?, CellControl2>, SetIterable<Team>> grouper) {
         return zoc
                 .keyValuesView()
-                .groupByEach(p -> p.getTwo().teamsGainingZoc())
+                .groupByEach(grouper)
                 .collectValues(Pair::getOne)
                 .rejectKeysValues(this::isNotOwnBySection)
                 .toMap(Sets.mutable::empty);
     }
+
 
     private boolean isNotOwnBySection(Team team, Cord cord) {
         return !isInMaster.test(cord);
     }
 
-    private Map<Team, Set<Cord>> losers(@Nonnull MapIterable<Cord, CellControl2> zoc) {
-        return zoc
-                .keyValuesView()
-                .groupByEach(p -> p.getTwo().teamsLoosingZoc())
-                .collectValues(Pair::getOne)
-                .rejectKeysValues(this::isNotOwnBySection)
-                .toMap(Sets.mutable::empty);
-    }
+
 
     private boolean isDirty(Cord cord, @SuppressWarnings("unused") CellControl2 dummy) {
         return this.dirty.contains(cord);
@@ -150,8 +183,8 @@ public class ZoneOfControlCalculator2 implements IZoneOfControlCalculator {
         //Use the pre-calculated map to find all cords affected
         cordToPoints.keyValuesView()
                 .sumByInt(p -> p.getOne().add(cord), ObjectIntPair::getTwo)
+                //.reject(isMasterCord)
                 .keyValuesView()
-                .select(this::isValidCord)
                 .forEach(p -> {
                     var c = p.getOne();
                     var points = p.getTwo();
@@ -176,9 +209,12 @@ public class ZoneOfControlCalculator2 implements IZoneOfControlCalculator {
 
 
     private class CellControl2 {
+
         private final MutableObjectIntMap<Team> teamInfluence = ObjectIntMaps.mutable.empty();
         private SetIterable<Team> currentWinners;
-        private SetIterable<Team> lastLosers;
+        private SetIterable<Team> lastWinners;
+        private SetIterable<Team> deltaLosers;
+        private SetIterable<Team> deltaWinner;
 
         private CellControl2() {
             clear();
@@ -206,28 +242,35 @@ public class ZoneOfControlCalculator2 implements IZoneOfControlCalculator {
 
             if (!snapshot) {
                 //Calculate the losers
-                lastLosers = currentWinners.difference(newWinners);
+                deltaLosers = lastWinners.difference(newWinners);
+                deltaWinner = newWinners.difference(lastWinners);
+                lastWinners = newWinners;
             }
             currentWinners = newWinners;
 
         }
 
-        private SetIterable<Team> teamsGainingZoc() {
+        private SetIterable<Team> currentWinners() {
             return currentWinners;
         }
 
+        private SetIterable<Team> teamsGainingZoc() {
+            return deltaWinner;
+        }
+
         private SetIterable<Team> teamsLoosingZoc() {
-            return lastLosers;
+            return deltaLosers;
         }
 
 
         private void clear(){
-            teamInfluence.clear();
-            this.currentWinners = Sets.immutable.empty();
-            this.lastLosers = Sets.immutable.empty();
+            this.deltaLosers = Sets.immutable.empty();
+            this.deltaWinner = Sets.immutable.empty();
+            this.lastWinners = Sets.immutable.empty();
         }
 
         public boolean hasControl(Team team) {
+
             return currentWinners.contains(team);
         }
     }

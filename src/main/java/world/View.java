@@ -1,6 +1,5 @@
 package world;
 
-import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.eclipse.collections.api.block.function.Function;
 import org.eclipse.collections.api.block.predicate.Predicate;
@@ -9,7 +8,6 @@ import org.eclipse.collections.impl.block.factory.Functions;
 import org.eclipse.collections.impl.block.factory.Predicates;
 import org.eclipse.collections.impl.factory.primitive.IntObjectMaps;
 
-import java.util.Map;
 import java.util.Set;
 
 
@@ -29,7 +27,8 @@ public class View {
     private final MutableIntObjectMap<Function<Cord, WorldCord>> sectionToViewFuncCache;
     private final MutableIntObjectMap<Function<WorldCord, Cord>> viewToSectionFuncCache;
     private final MutableIntObjectMap<Predicate<Cord>> isSectionCordInViewPredicateCache;
-    private Map<Integer, MasterRectangle> masterRectCache;
+    private final MutableIntObjectMap<MasterRectangle> masterRectCache;
+
 
 
     public View(WorldDefinition worldDefinition, ViewDefinition viewDefinition) {
@@ -48,8 +47,8 @@ public class View {
         this.inView = viewCord -> viewCord.col >= minCol && viewCord.col < maxCol && viewCord.row >= minRow && viewCord.row < maxRow;
 
         this.sectionToViewFuncCache = IntObjectMaps.mutable.empty();
-        this.masterRectCache = Maps.newHashMap();
         this.viewToSectionFuncCache = IntObjectMaps.mutable.empty();
+        this.masterRectCache = IntObjectMaps.mutable.empty();
 
         isSectionCordInViewPredicateCache = IntObjectMaps.mutable.empty();
 
@@ -99,13 +98,14 @@ public class View {
         return viewToSectionFuncCache.getIfAbsentPutWithKey(sectionNo, sn -> Functions.chain(viewToWorld, worldDefinition.world.toSection(sn)));
     }
 
-    public WorldCord viewToWorld(WorldCord viewCord) {
+    WorldCord viewToWorld(WorldCord viewCord) {
         return viewToWorld.apply(viewCord);
     }
 
-    public WorldCord worldToView(WorldCord worldCord) {
+    WorldCord worldToView(WorldCord worldCord) {
         return worldToView.apply(worldCord);
     }
+
 
     /**
      * @param viewCord
@@ -132,23 +132,18 @@ public class View {
         return worldDefinition.section.isSectionMaster(sectionNo);
     }
 
-    public MasterRectangle masterRectangle(Integer sectionNo) {
-        var f = masterRectCache.get(sectionNo);
-        if (f == null) {
-            f = new MasterRectangle(sectionNo);
-            masterRectCache.put(sectionNo, f);
-        }
-        return f;
+    public MasterRectangle masterRectangle(int sectionNo) {
+        return masterRectCache.getIfAbsentPutWithKey(sectionNo, sn -> new MasterRectangle(sn));
     }
 
     public class MasterRectangle {
 
-        public final WorldCord NW;
-        public final WorldCord NE;
-        public final WorldCord SW;
-        public final WorldCord SE;
+        final WorldCord NW;
+        final WorldCord NE;
+        final WorldCord SW;
+        final WorldCord SE;
 
-        MasterRectangle(Integer sectionNo) {
+        MasterRectangle(int sectionNo) {
             var srm = worldDefinition.section.masterRectangle(sectionNo);
             NW = sectionToView(sectionNo).apply(srm.NW);
             NE = sectionToView(sectionNo).apply(srm.NE);
@@ -156,5 +151,8 @@ public class View {
             SE = sectionToView(sectionNo).apply(srm.SE);
         }
 
+        public Rect asRect() {
+            return new Rect(NW.col, NW.row, NE.col - NW.col, SW.row - NW.row);
+        }
     }
 }

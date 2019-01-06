@@ -1,8 +1,11 @@
 package world;
 
+import com.dslplatform.json.CompiledJson;
+
 import static java.lang.String.format;
 
 
+@CompiledJson(onUnknown = CompiledJson.Behavior.IGNORE)
 public interface Team {
 
 

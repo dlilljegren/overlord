@@ -46,18 +46,7 @@ public abstract class SectionMessage {
             }
         }
 
-        public static class IllegalTerrain extends Failed {
 
-            private final Terrain terrain;
-            private final Cord cord;
-
-            protected IllegalTerrain(int section, String errorMessage, Terrain terrain, Cord cord) {
-                super(section, errorMessage);
-
-                this.terrain = terrain;
-                this.cord = cord;
-            }
-        }
     }
 
     public static class TryRemoveUnit extends SectionMessage {
@@ -77,27 +66,6 @@ public abstract class SectionMessage {
                     .toString();
         }
 
-        public static class Ack extends SectionMessage {
-            private final Unit unit;
-            private final Cord cord;
-            private final Team team;
-
-            public Ack(Unit unit, Cord cord, Team team) {
-
-                this.unit = unit;
-                this.cord = cord;
-                this.team = team;
-            }
-
-            @Override
-            public String toString() {
-                return MoreObjects.toStringHelper(this)
-                        .add("unit", unit)
-                        .add("cord", cord)
-                        .add("team", team)
-                        .toString();
-            }
-        }
     }
 
 
@@ -270,5 +238,22 @@ public abstract class SectionMessage {
         }
     }
 
+    /**
+     * Sent by game server to populate a random base with units
+     */
+    public static class PopulateRandomBase extends SectionMessage {
+        public final Team team;
+
+        public PopulateRandomBase(Team team) {
+            this.team = team;
+        }
+
+        @Override
+        public String toString() {
+            return MoreObjects.toStringHelper(this)
+                    .add("team", team)
+                    .toString();
+        }
+    }
 
 }

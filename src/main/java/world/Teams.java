@@ -10,7 +10,8 @@ public abstract class Teams {
     private static ConcurrentHashMap<String, Team> teams = new ConcurrentHashMap();
 
     public static final Team RED = teamForName("Red");
-    public static final Team Blue = teamForName("Blue");
+    public static final Team BLUE = teamForName("Blue");
+    public static final Team BLACK = teamForName("Black");
 
     public static Team None = new NoTeam();
 

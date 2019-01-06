@@ -3,17 +3,22 @@ package world;
 import changes.SectionUpdate;
 import changes.SectionUpdateBuilder;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import map.IBaseGenerator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.impl.block.factory.Functions;
+import org.eclipse.collections.impl.map.mutable.MapAdapter;
 import world.exceptions.AddUnitException;
+import world.exceptions.RemoveUnitException;
+import world.exceptions.SectionException;
 
+import javax.annotation.Nonnull;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Random;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.Predicate;
@@ -26,8 +31,7 @@ import static java.util.stream.Collectors.toUnmodifiableMap;
 
 public class Section {
     public final int sectionNo;
-    private final int row;
-    private final int column;
+
 
     private final WorldDefinition worldDefinition;
     private final SectionDefinition sectionDefinition;
@@ -38,9 +42,9 @@ public class Section {
     private final MutableMap<Cord, Unit> units = org.eclipse.collections.impl.factory.Maps.mutable.empty();
     private final Map<Cord, Terrain> terrains;
 
-    final Map<Cord, Base<Cord>> bases;
+    private final Map<Cord, Base<Cord>> bases;
 
-    final Map<Cord, Cell> cells;
+    private final Map<Cord, Cell> cells;
 
     private final Map<Cord, Base<Cord>> cordToBase;
 
@@ -57,7 +61,7 @@ public class Section {
     private static final Logger L = LogManager.getLogger(Section.class);
 
 
-    private final IZoneOfControlCalculator zoneOfControlCalculator;
+    private final IZoneOfControlCalculator zoc;
 
     public Section(int sectionNo, WorldDefinition worldDefinition, ITerrainMap<Cord> map, IBaseGenerator baseGenerator) {
         assert sectionNo >= 0;
@@ -88,15 +92,13 @@ public class Section {
 
         this.neighbours = SectorNeighbours.create(worldDefinition, sectionNo);
 
-        this.row = sectionNo / worldDefinition.gridWidth;
-        this.column = sectionNo % worldDefinition.gridWidth;
 
         this.sectionNeighbours = Maps.newHashMap();
 
         SectorCellCalculator scc = new SectorCellCalculator(sectionNo, worldDefinition);
         this.cells = scc.cells().collect(toUnmodifiableMap(c -> c.cord, Function.identity()));
 
-        this.isSectionMaster = sc -> cells.get(sc).master == sectionNo;
+        this.isSectionMaster = worldDefinition.section.isSectionMaster(sectionNo);
 
         this.nextNewUnits = worldDefinition.rules::unitsAllocatedPerSection;
 
@@ -104,10 +106,8 @@ public class Section {
         Function<Base<Cord>, Stream<Map.Entry<Cord, Base>>> baseToStream = b -> b.area.stream().map(c -> Maps.immutableEntry(c, b));
         this.cordToBase = bases.values().stream().flatMap(baseToStream).collect(toUnmodifiableMap(e -> e.getKey(), e -> e.getValue()));
 
+        zoc = new ZoneOfControlCalculator2(sectionNo, worldDefinition);
 
-        this.bases.values().stream().findFirst().ifPresent(b -> populateBase(b, Teams.teamForName("red")));
-
-        this.zoneOfControlCalculator = new ZoneOfControlCalculator2(sectionNo, worldDefinition);
 
         //Keep at end
         var initialSnapshot = new SectionUpdateBuilder();
@@ -130,6 +130,7 @@ public class Section {
         isSectionMasterOrThrow(cord);
         isControlledOrThrow(cord, unit);
         addUnitAtCord(unit, cord);
+        this.version = currentVersion().next();
     }
 
     public Unit tryRemoveUnitAtCord(Team team, Cord cord) {
@@ -140,10 +141,14 @@ public class Section {
         assert unit != null;
 
         if (!unit.team.equals(team)) {
-            throw new RuntimeException(format("Can't remove unit at cord [%s] as it belongs to team [%s] while the request was made for team [%s]", cord, unit.team, team));
+            throw new RemoveUnitException(sectionNo, cord, format("Can't remove unit at cord [%s] as it belongs to team [%s] while the request was made for team [%s]", cord, unit.team, team));
         }
 
-        return this.removeUnitAtCord(unit, cord);
+        var removedUnit = this.removeUnitAtCord(unit, cord);
+        if (removedUnit != null) {
+            this.version = currentVersion().next();
+        }
+        return removedUnit;
     }
 
     public boolean isOccupied(Cord cord) {
@@ -156,7 +161,7 @@ public class Section {
 
     private void isNotOccupiedOrThrow(Cord cord) {
         if (!units.containsKey(cord)) {
-            throw new RuntimeException(format("No unit exist at cord %s", cord));
+            throw new RemoveUnitException(sectionNo, cord, format("No unit exist at cord %s", cord));
         }
     }
 
@@ -180,7 +185,7 @@ public class Section {
      * @param unit
      */
     private void isControlledOrThrow(Cord cord, Unit unit) {
-        if (!this.zoneOfControlCalculator.hasControl(unit.team, cord)) {
+        if (!this.zoc.hasControl(unit.team, cord)) {
             throw new AddUnitException.NotInZocException(this.sectionNo, cord, unit.team);
         }
     }
@@ -198,7 +203,7 @@ public class Section {
     }
 
     public Map<Integer, Cord> slavesAtCord(Cord cord) {
-        final Map<Integer, Cord> collect = this.neighbours.slaves().stream()
+        @SuppressWarnings("UnstableApiUsage") final Map<Integer, Cord> collect = this.neighbours.slaves().stream()
                 .map(this::neighbour)
                 .filter(n -> n.isValid(cord))
                 .collect(toImmutableMap(n -> n.sectionNo, n -> n.translate(cord)));
@@ -207,27 +212,12 @@ public class Section {
 
     private void inSectionOrThrow(Cord cord) {
         if (!this.sectionDefinition.inSection(cord))
-            throw new RuntimeException(format("Cord %s outside sectionNo"));
+            throw new SectionException(sectionNo, format("Cord:[%s] outside sectionNo:[%d]", cord, sectionNo));
     }
 
 
     public int getMasterForCord(Cord cord) {
-        //Transform to cord space of potential masters
-        //If we find a valid master ( picking the lowest in case there are many ) return masters id
-        //Otherwise this sectionNo is the master
 
-        /*
-        final Integer master = neighbours.masters().stream()
-                .map(this::neighbour)
-                .filter(n -> n.isValid(cord))
-                .sorted()
-                .findFirst()
-                .map(sectionNeighbour -> sectionNeighbour.sectionNo)
-                .orElse(this.sectionNo);
-        return
-                master;
-                */
-        //assert worldDefinition.sectionDefinition.inSectionOrThrow(cord) : cord;
         if (!this.worldDefinition.sectionDefinition.inSection(cord)) {
             throw new RuntimeException(format("Invalid cord:%s", cord));
         }
@@ -242,7 +232,9 @@ public class Section {
     }
 
     public Cord translate(Cord cord, int neighbour) {
-        return neighbour(neighbour).translate(cord);
+        var neighbourCord = worldDefinition.section.fromTo(this.sectionNo, neighbour).apply(cord);
+        assert this.worldDefinition.section.inSection(neighbourCord) : format("[%s] is not a valid section cord in section:[%d]. Translated from [%s] in master section [%d]", neighbourCord, neighbour, cord, this.sectionNo);
+        return neighbourCord;
     }
 
     public SectorCombatResult combat() {
@@ -287,6 +279,7 @@ public class Section {
         assert !badAndGood.containsKey(Boolean.FALSE);
         badAndGood.getOrDefault(Boolean.TRUE, Collections.EMPTY_LIST).forEach(this.units::remove);
 
+        //ToDo add zoc
         this.version = delta.sectionVersion;
     }
 
@@ -302,27 +295,22 @@ public class Section {
         return this.lastSnapshot;
     }
 
-    public ZocResult calculateZoneOfControl() {
-        var result = this.zoneOfControlCalculator.calculateSnapshot(this.units);
-        return result;
-    }
-
-
     /**
-     * Called by the slaves, might need to fix this for the zone of control, if slaves will actually be able to add
-     *
      * @param unit
      * @param cord
      */
     void addUnitAtCord(Unit unit, Cord cord) {
         inSectionOrThrow(cord);
         units.put(cord, unit);
+        zoc.addUnit(unit, cord);
         version = version.next();
     }
 
-    Unit removeUnitAtCord(Unit unit, Cord cord) {
+    private Unit removeUnitAtCord(Unit unit, Cord cord) {
         var removed = units.remove(cord);
+        assert removed != null : format("No unit at cord:[%s] expected:[%s] in section:[%d]", cord, unit, sectionNo);
         assert removed.equals(unit);
+        zoc.removeUnit(unit, cord);
         return removed;
     }
 
@@ -333,37 +321,77 @@ public class Section {
      * @param team
      * @return the newly created units
      */
-    public Map<Cord, Unit> populateBase(Base<Cord> base, Team team) {
-        Set<Cord> freeZoc = Sets.filter(base.zoneOfControl, this::isFree);
+    public MapIterable<Cord, Unit> populateBase(Base<Cord> base, Team team) {
         var unit = Unit.forTeam(team);
-
-        var newUnits = freeZoc.stream().collect(toUnmodifiableMap(Function.identity(), c -> unit));
+        var newUnits = base.zoneOfControl
+                .stream()
+                .filter(isSectionMaster)
+                .filter(this::isFree)
+                .collect(toUnmodifiableMap(Function.identity(), c -> unit));
         L.info("Added [{}] units around base", newUnits.size());
         units.putAll(newUnits);
-        return newUnits;
+
+        zoc.addUnits(newUnits);
+
+        return MapAdapter.adapt(newUnits);
     }
 
+    public MapIterable<Cord, Unit> populateRandomBase(Team owner) {
+        if (bases.size() == 0) return org.eclipse.collections.impl.factory.Maps.immutable.empty();
+
+        Random r = new Random();
+        var random = r.nextInt(Math.max(1, this.bases.size() - 1));
+        var base = this.bases.values().stream().skip(random).findFirst();
+
+        var result = base.map(b -> populateBase(b, owner));
+
+
+        this.version = currentVersion().next();
+
+        return result.orElseGet(org.eclipse.collections.impl.factory.Maps.immutable::empty);
+
+    }
+
+
     public void slaveAddUnitAtCord(Unit unit, Cord cord) {
+        assert !worldDefinition.section.isSectionMaster(sectionNo).test(cord) : "Can only slave add cords outside the section's master rectangle";
         this.addUnitAtCord(unit, cord);
+        this.version = currentVersion().next();
     }
 
     public void slaveRemoveUnitAtCord(Unit unit, Cord cord) {
+        assert !worldDefinition.section.isSectionMaster(sectionNo).test(cord) : "Can only slave add cords outside the section's master rectangle";
         this.removeUnitAtCord(unit, cord);
+        this.version = currentVersion().next();
+    }
+
+    public Unit getUnit(Cord cord) {
+        return units.get(cord);
+    }
+
+    public ZocResult getCurrentZoc() {
+        return zoc.getSnapshot();
+    }
+
+    public ZocResult getDeltaZoc() {
+        return zoc.getDelta();
     }
 
 
+    /**
+     * ToDo get rid of this
+     */
     class SectionNeighbour implements Comparable<SectionNeighbour> {
 
         final int sectionNo;
-        final int translateX;
-        final int translateY;
+
+        final Function<Cord, Cord> sectionToNeighbour;
 
         SectionNeighbour(int sectionNo) {
             this.sectionNo = sectionNo;
 
+            this.sectionToNeighbour = Functions.chain(worldDefinition.section.toWorld(Section.this.sectionNo), worldDefinition.world.toSection(sectionNo));
 
-            this.translateX = worldDefinition.translateColumn(Section.this.sectionNo, sectionNo);
-            this.translateY = worldDefinition.translateRow(Section.this.sectionNo, sectionNo);
         }
 
         boolean isValid(Cord cordInThisSection) {
@@ -372,13 +400,11 @@ public class Section {
         }
 
         Cord translate(Cord cordInThisSection) {
-            return Cord.at(
-                    cordInThisSection.col + translateX,
-                    cordInThisSection.row + translateY);
+            return this.sectionToNeighbour.apply(cordInThisSection);
         }
 
         @Override
-        public int compareTo(SectionNeighbour o) {
+        public int compareTo(@Nonnull SectionNeighbour o) {
             return Integer.compare(sectionNo, o.sectionNo);
         }
     }

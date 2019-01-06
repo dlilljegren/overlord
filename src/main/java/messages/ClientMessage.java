@@ -122,25 +122,34 @@ public abstract class ClientMessage {
     public static class ZoneOfControl extends ClientMessage {
         @Nonnull
         public final int sectionNo;
+
+        @Nonnull
+        public final Rect sectionRect;
         @Nonnull
         public final Map<Team, Set<WorldCord>> gained;
 
         @Nonnull
         public final Map<Team, Set<WorldCord>> lost;
 
+        @Nonnull
+        public final boolean isSnapshot;
 
-        public ZoneOfControl(int sectionNo, Map<Team, Set<WorldCord>> gained, Map<Team, Set<WorldCord>> lost) {
+        public ZoneOfControl(int sectionNo, Rect sectionRect, Map<Team, Set<WorldCord>> gained, Map<Team, Set<WorldCord>> lost, boolean isSnapshot) {
             this.sectionNo = sectionNo;
+            this.sectionRect = sectionRect;
             this.gained = gained;
             this.lost = lost;
+            this.isSnapshot = isSnapshot;
         }
 
         @Override
         public String toString() {
             return MoreObjects.toStringHelper(this)
                     .add("sectionNo", sectionNo)
+                    .add("isSnapshot", isSnapshot)
                     .add("gained", Maps.transformEntries(gained, (t, cSet) -> cSet.size()))
                     .add("lost", Maps.transformEntries(lost, (t, cSet) -> cSet.size()))
+                    .add("sectionRect", sectionRect)
                     .toString();
         }
     }

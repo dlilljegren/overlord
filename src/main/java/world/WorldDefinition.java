@@ -7,6 +7,7 @@ import org.eclipse.collections.api.block.function.Function;
 import org.eclipse.collections.api.block.predicate.Predicate;
 import org.eclipse.collections.api.map.primitive.IntObjectMap;
 import org.eclipse.collections.api.set.ImmutableSet;
+import org.eclipse.collections.impl.block.factory.Functions;
 import org.eclipse.collections.impl.factory.primitive.IntObjectMaps;
 import util.GSColl;
 
@@ -83,13 +84,13 @@ public class WorldDefinition {
         return gridWidth * gridHeight;
     }
 
-    public int translateColumn(int fromSection, int toSection) {
+    int translateColumn(int fromSection, int toSection) {
         int from = gridColumn(fromSection);
         int to = gridColumn(toSection);
         return (from - to) * (sectionDefinition.cols - colSectionOverlap);
     }
 
-    public int translateRow(int fromSection, int toSection) {
+    int translateRow(int fromSection, int toSection) {
         int from = gridRow(fromSection);
         int to = gridRow(toSection);
         return (from - to) * (sectionDefinition.rows - rowSectionOverlap);
@@ -271,6 +272,12 @@ public class WorldDefinition {
 
         }
 
+        public Function<Cord, Cord> fromTo(int fromSectionNo, int toSectionNo) {
+            var toWorld = section.toWorld(fromSectionNo);
+            var fromWorld = world.toSection(toSectionNo);
+            return Functions.chain(toWorld, fromWorld);
+        }
+
         /**
          * @param sectionNo
          * @return function that for a given mainSection converts to world coordinates
@@ -299,7 +306,7 @@ public class WorldDefinition {
             return sectionDefinition.inSection(cord);
         }
 
-        public Predicate<Cord> isSectionMaster(Integer sectionNo) {
+        public Predicate<Cord> isSectionMaster(int sectionNo) {
             var mr = masterRectangle(sectionNo);
             return c -> mr.insideMasterRect(c);
         }

@@ -210,6 +210,10 @@ export function clear(destCtx,cord){
     destCtx.clearRect(cord.col*S,cord.row*S,S,S);
 }
 
+export function clearRect(destCtx,rect){
+    destCtx.clearRect(rect.col*S,rect.row*S,rect.width*S,rect.height*S);
+}
+
 export function redBase(destCtx,col,row){
     draw("Base2",destCtx,col,row);
     destCtx.globalCompositeOperation="source-atop";

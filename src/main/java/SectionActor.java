@@ -10,6 +10,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import games.GameDefinition;
 import messages.*;
+import org.eclipse.collections.api.map.MapIterable;
 import world.*;
 import world.exceptions.AddUnitException;
 
@@ -106,9 +107,11 @@ public class SectionActor extends AbstractActorWithTimers {
                 .match(SectionMessage.StartCombat.class, this::process)
                 .match(SectionMessage.RequestSnapshot.class, this::process)
                 .match(SectionMessage.CalculateZoneOfControl.class, this::process)
+                .match(SectionMessage.PopulateRandomBase.class, this::process)
                 .matchAny(o -> log.warning("received unknown message [{}]", o))
                 .build();
     }
+
 
 
 
@@ -122,9 +125,9 @@ public class SectionActor extends AbstractActorWithTimers {
         //log.debug("Broadcasting ZoneOfControl message");
         //Inform all sessions
 
-        var zocSnap = this.section.calculateZoneOfControl();
+        //var zocSnap = this.section.calculateZoneOfControl();
 
-        this.broadcastZoneOfControl(zocSnap);
+        //this.broadcastZoneOfControl(zocSnap);
 
     }
 
@@ -134,6 +137,7 @@ public class SectionActor extends AbstractActorWithTimers {
         log.info("[{}] requested snapshot", sender().path());
         var state = section.snapshot();
         sender().tell(new SectionReply.Snapshot(state), self());
+
     }
 
 
@@ -168,13 +172,11 @@ public class SectionActor extends AbstractActorWithTimers {
                 section.tryAddUnitAtCord(addUnit.unit, addUnit.cord);
                 log.info("Added unit [{}] at [{}]", addUnit.unit, addUnit.cord);
                 //Tell all slaves about the update
-                section.slavesAtCord(addUnit.cord).forEach((sectionNo, cord) -> {
-                    log.info("Informing slave [{}]", sectionNo);
-                    var slaveCord = section.translate(addUnit.cord, sectionNo);
-                    neighbours.slaves.get(sectionNo).tell(new SectionMessage.SlaveSetUnit(addUnit.unit, slaveCord), self());
-                });
+                tellSlavesUnitAdded(addUnit.cord, addUnit.unit);
+
                 sender().tell(new SectionMessage.Ok(sectorNo), self());
                 broadcastUnitAdded(addUnit.unit, addUnit.cord);
+                broadcastZoneOfControl(section.getDeltaZoc());
             } else {
                 //Forward request to master
                 var masterCord = section.translate(addUnit.cord, cordMasterSection);
@@ -198,18 +200,14 @@ public class SectionActor extends AbstractActorWithTimers {
             var cord = message.cord;
             var team = message.team;
             if (cordMasterSection == this.sectorNo) {
-
                 var unit = section.tryRemoveUnitAtCord(message.team, message.cord);
+                assert unit.team == message.team;
                 log.info("Removed unit for team [{}] at [{}]", message.team, message.cord);
                 //Tell all slaves about the update
-                section.slavesAtCord(message.cord).forEach((sectionNo, cordInSelf) -> {
-                    log.info("Informing slave [{}]", sectionNo);
-                    neighbours.slaves.get(sectionNo).tell(new SectionMessage.SlaveRemoveUnit(unit, cord), self());
-                });
+                tellSlavesUnitRemoved(cord, unit);
                 sender().tell(new SectionMessage.Ok(sectorNo), self());
                 broadcastUnitRemoved(unit, message.cord);
-
-                sender().tell(new SectionMessage.TryRemoveUnit.Ack(unit, cord, team), self());
+                broadcastZoneOfControl(section.getDeltaZoc());
             } else {
                 //Forward request to master
                 var toMaster = new SectionMessage.TryRemoveUnit(team, section.translate(message.cord, cordMasterSection));
@@ -236,6 +234,9 @@ public class SectionActor extends AbstractActorWithTimers {
         }
         section.slaveAddUnitAtCord(addUnit.unit, addUnit.cord);
         broadcastUnitAdded(addUnit.unit, addUnit.cord);
+
+        //Even if outside master rectangle this may effect the zoc
+        broadcastZoneOfControl(section.getDeltaZoc());
     }
 
     private void process(SectionMessage.SlaveRemoveUnit message) {
@@ -245,6 +246,9 @@ public class SectionActor extends AbstractActorWithTimers {
             return;
         }
         section.slaveRemoveUnitAtCord(message.unit, message.cord);
+
+        //Even if outside master rectangle this may effect the zoc within master zone
+        broadcastZoneOfControl(section.getDeltaZoc());
     }
 
 
@@ -299,6 +303,25 @@ public class SectionActor extends AbstractActorWithTimers {
         combatCounter++;
     }
 
+    private void process(SectionMessage.PopulateRandomBase populateRandomBase) {
+        MapIterable<Cord, Unit> added = section.populateRandomBase(populateRandomBase.team);
+        added.forEachKeyValue(this::tellSlavesUnitAdded);
+    }
+
+    private void tellSlavesUnitAdded(Cord cord, Unit unit) {
+        section.slavesAtCord(cord).forEach((sectionNo, slaveCord) -> {
+            log.debug("Informing slave [{}] to add unit:[{}] at:[{}]", sectionNo, unit, slaveCord);
+            neighbours.slaves.get(sectionNo).tell(new SectionMessage.SlaveSetUnit(unit, slaveCord), self());
+        });
+    }
+
+    private void tellSlavesUnitRemoved(Cord cord, Unit unit) {
+        section.slavesAtCord(cord).forEach((sectionNo, slaveCord) -> {
+            log.debug("Informing slave [{}] to remove unit:[{}] at:[{}]", sectionNo, unit, slaveCord);
+            neighbours.slaves.get(sectionNo).tell(new SectionMessage.SlaveRemoveUnit(unit, slaveCord), self());
+        });
+    }
+
     private void process(@SuppressWarnings("unused") SectionMessage.StopCombat stop) {
         log.info("Stopping Combat");
         this.getContext().become(normal);
@@ -323,7 +346,7 @@ public class SectionActor extends AbstractActorWithTimers {
             if (!result.isSnapshot()) return;
             if (lastZoneOfControlEmpty) return;
         }
-        broadcast(new SectionBroadcastMessage.ZoneOfControl(this.sectorNo, result.gained, result.lost));
+        broadcast(new SectionBroadcastMessage.ZoneOfControl(this.sectorNo, result.gained, result.lost, result.isSnapshot()));
         lastZoneOfControlEmpty = result.isEmpty();
     }
 

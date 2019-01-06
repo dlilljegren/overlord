@@ -229,7 +229,8 @@ public class ViewActor extends AbstractActor {
                         .select(onlyInView)
                         .collect(toWorld));
 
-        var msg = new ClientMessage.ZoneOfControl(zoneOfControl.sectionNo, gained, lost);
+        var rect = view.masterRectangle(section).asRect();
+        var msg = new ClientMessage.ZoneOfControl(zoneOfControl.sectionNo, rect, gained, lost, zoneOfControl.isSnapshot);
 
 
         toSession(msg);

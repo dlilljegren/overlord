@@ -102,7 +102,6 @@ public class PlayerActor extends AbstractActor {
                 .match(PlayerCommand.RemoveUnit.class, this::process)
                 .match(PlayerMessage.SectionAllocatedUnits.class, this::process)
                 .match(GameMessage.AssignSession.class, this::process)
-                .match(SectionMessage.TryRemoveUnit.Ack.class, this::process)
                 .match(SessionTerminated.class, this::processAllStates)
                 .match(SectionMessage.UnregisterPlayer.Ack.class, this::processAllStates)
                 .match(PlayerCommand.AssignSection.class, this::processPlaying)
@@ -110,10 +109,7 @@ public class PlayerActor extends AbstractActor {
                 .build();
     }
 
-    private void process(SectionMessage.TryRemoveUnit.Ack message) {
-        unitBank.addUnits(1);
-        sessionState.tell(new PlayerMessage.UnitStatus(unitBank.balance()));
-    }
+
 
     private void process(PlayerMessage.SectionAllocatedUnits message) {
         unitBank.addUnits(message.totalUnits());
@@ -164,7 +160,7 @@ public class PlayerActor extends AbstractActor {
     private void process(PlayerCommand.RemoveUnit message) {
         assert sectionState.hasSection();
         try {
-            log.info("RemoveUnit: [{}]", message);
+            log.info("Removing Unit: [{}]", message);
             SectionMessage.TryRemoveUnit sectionMessage = new SectionMessage.TryRemoveUnit(player.team, message.cord);
             var sectionActor = this.actorLookup.findSection(message.section);
             var sender = sender();
@@ -173,6 +169,7 @@ public class PlayerActor extends AbstractActor {
                     .thenAcceptAsync(v -> {
                         unitBank.addUnits(+1);
                         sessionState.tell(new PlayerMessage.UnitStatus(unitBank.balance()));
+                        log.info("Unit removed ok:[{}]", v);
                     }, getContext().dispatcher())
                     .exceptionally(t -> {
                         if (t.getCause() instanceof RemoveUnitException) {
